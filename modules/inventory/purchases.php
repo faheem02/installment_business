@@ -1,0 +1,408 @@
+<?php
+session_start();
+$page_title = 'Purchases';
+$base_url = '../../';
+require_once '../../includes/functions.php';
+
+$suppliers = getAll('suppliers', 'name ASC');
+
+// Handle form submission
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $purchase_date = $_POST['purchase_date'];
+    $supplier_id   = (int)($_POST['supplier_id'] ?? 0);
+    $invoice_no    = $_POST['invoice_no'] ?? '';
+    $product_id    = (int)($_POST['product_id'] ?? 0);
+    $purchase_price = (float)($_POST['purchase_price'] ?? 0);
+    $product_type  = $_POST['product_type'] ?? 'general';
+    $notes         = $_POST['notes'] ?? '';
+
+    // Determine quantity based on product type
+    if ($product_type === 'bike') {
+        $engines = $_POST['bike_engine'] ?? [];
+        $chassis = $_POST['bike_chassis'] ?? [];
+        $quantity = max(count($engines), count($chassis), 1);
+    } elseif ($product_type === 'mobile') {
+        $imei1s = $_POST['mobile_imei1'] ?? [];
+        $quantity = max(count($imei1s), 1);
+    } else {
+        $quantity = (int)($_POST['quantity'] ?? 1);
+    }
+
+    $subtotal = $quantity * $purchase_price;
+
+    // Uniqueness checks for bike/mobile identifiers
+    if ($product_type === 'bike') {
+        $engines = $_POST['bike_engine'] ?? [];
+        $chassis = $_POST['bike_chassis'] ?? [];
+        $all_serials = array_merge(array_filter($engines), array_filter($chassis));
+        foreach ($all_serials as $s) {
+            $chk = $pdo->prepare("SELECT COUNT(*) FROM product_serials WHERE serial_number = ?");
+            $chk->execute([$s]);
+            if ($chk->fetchColumn() > 0) {
+                $_SESSION['error'] = "Engine/Chassis No. '$s' already exists in system.";
+                header("Location: purchases.php");
+                exit;
+            }
+        }
+    } elseif ($product_type === 'mobile') {
+        $imei1s = $_POST['mobile_imei1'] ?? [];
+        $imei2s = $_POST['mobile_imei2'] ?? [];
+        $all_imeis = array_merge(array_filter($imei1s), array_filter($imei2s));
+        foreach ($all_imeis as $i) {
+            $chk = $pdo->prepare("SELECT COUNT(*) FROM product_serials WHERE imei_number = ?");
+            $chk->execute([$i]);
+            if ($chk->fetchColumn() > 0) {
+                $_SESSION['error'] = "IMEI '$i' already exists in system.";
+                header("Location: purchases.php");
+                exit;
+            }
+        }
+    }
+
+    try {
+        $pdo->beginTransaction();
+
+        $stmt = $pdo->prepare("INSERT INTO purchases (supplier_id, invoice_no, purchase_date, total_amount, paid_amount, due_amount, status, notes, created_by, created_at) VALUES (?, ?, ?, ?, 0, ?, 'received', ?, ?, NOW())");
+        $stmt->execute([$supplier_id ?: null, $invoice_no, $purchase_date, $subtotal, $subtotal, $notes, $_SESSION['user_id'] ?? 1]);
+        $purchase_id = $pdo->lastInsertId();
+
+        $stmt = $pdo->prepare("INSERT INTO purchase_items (purchase_id, product_id, quantity, purchase_price, subtotal) VALUES (?, ?, ?, ?, ?)");
+        $stmt->execute([$purchase_id, $product_id, $quantity, $purchase_price, $subtotal]);
+
+        // Update product stock
+        $pdo->prepare("UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?")->execute([$quantity, $product_id]);
+
+        // Record individual unit identifiers
+        if ($product_type === 'bike') {
+            $engines = $_POST['bike_engine'] ?? [];
+            $chassis = $_POST['bike_chassis'] ?? [];
+            $color = $_POST['bike_color'] ?? '';
+            for ($i = 0; $i < $quantity; $i++) {
+                $eng = $engines[$i] ?? '';
+                $cha = $chassis[$i] ?? '';
+                $serial = $eng ?: $cha;
+                if ($serial) {
+                    $stmt = $pdo->prepare("INSERT INTO product_serials (product_id, serial_number, purchase_id, status, notes, created_at) VALUES (?, ?, ?, 'available', ?, NOW())");
+                    $stmt->execute([$product_id, $serial, $purchase_id, "Bike $color - $cha"]);
+                }
+            }
+        } elseif ($product_type === 'mobile') {
+            $imei1s = $_POST['mobile_imei1'] ?? [];
+            $imei2s = $_POST['mobile_imei2'] ?? [];
+            $storages = $_POST['mobile_storage'] ?? [];
+            $rams = $_POST['mobile_ram'] ?? [];
+            $cond = $_POST['mobile_condition'] ?? 'New';
+            for ($i = 0; $i < $quantity; $i++) {
+                $i1 = $imei1s[$i] ?? '';
+                $i2 = $imei2s[$i] ?? '';
+                $st = $storages[$i] ?? '';
+                $ra = $rams[$i] ?? '';
+                if ($i1) {
+                    $stmt = $pdo->prepare("INSERT INTO product_serials (product_id, imei_number, purchase_id, status, notes, created_at) VALUES (?, ?, ?, 'available', ?, NOW())");
+                    $stmt->execute([$product_id, $i1, $purchase_id, "Mobile - $st/$ra - $cond"]);
+                }
+                if ($i2) {
+                    $stmt = $pdo->prepare("INSERT INTO product_serials (product_id, imei_number, purchase_id, status, created_at) VALUES (?, ?, ?, 'available', NOW())");
+                    $stmt->execute([$product_id, $i2, $purchase_id]);
+                }
+            }
+        }
+
+        $pdo->commit();
+        $_SESSION['success'] = 'Purchase recorded successfully.';
+        header("Location: purchases.php");
+        exit;
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        $_SESSION['error'] = 'Error: ' . $e->getMessage();
+    }
+}
+
+// Fetch recent purchases
+$recent = $pdo->query("SELECT p.*, s.name AS supplier_name, (SELECT COUNT(*) FROM purchase_items pi WHERE pi.purchase_id = p.id) AS item_count FROM purchases p LEFT JOIN suppliers s ON p.supplier_id = s.id ORDER BY p.created_at DESC")->fetchAll();
+
+require_once '../../includes/header.php';
+?>
+
+<style>
+  .type-radio-group { display: flex; gap: 20px; margin-bottom: 20px; }
+  .type-radio-group label { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 10px 20px; border: 2px solid #e2e8f0; border-radius: 10px; transition: all .2s; }
+  .type-radio-group label:hover { border-color: #a0aec0; }
+  .type-radio-group input:checked + label { border-color: #4e73df; background: #eef2ff; font-weight: 600; }
+  .type-radio-group input { display: none; }
+  .type-section { display: none; }
+  .type-section.active { display: block; }
+</style>
+
+<div class="card shadow mb-4">
+  <div class="card-header py-3">
+    <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-truck"></i> New Purchase Entry</h6>
+  </div>
+  <div class="card-body">
+    <form method="post">
+      <div class="row mb-3">
+        <div class="col-md-4 form-group">
+          <label class="font-weight-bold small">Purchase Date</label>
+          <input type="date" name="purchase_date" class="form-control" value="<?=date('Y-m-d')?>" required>
+        </div>
+        <div class="col-md-4 form-group">
+          <label class="font-weight-bold small">Supplier</label>
+          <select name="supplier_id" class="form-control">
+            <option value="">Select Supplier</option>
+            <?php foreach ($suppliers as $s): ?>
+              <option value="<?=$s['id']?>"><?=htmlspecialchars($s['name'])?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div class="col-md-4 form-group">
+          <label class="font-weight-bold small">Invoice No.</label>
+          <input type="text" name="invoice_no" class="form-control" placeholder="Supplier invoice #">
+        </div>
+      </div>
+
+      <hr>
+      <label class="font-weight-bold small">Product Type</label>
+      <div class="type-radio-group">
+        <input type="radio" name="product_type" value="bike" id="typeBike" checked>
+        <label for="typeBike"><i class="fas fa-motorcycle fa-lg"></i> Bike</label>
+
+        <input type="radio" name="product_type" value="mobile" id="typeMobile">
+        <label for="typeMobile"><i class="fas fa-mobile-alt fa-lg"></i> Mobile</label>
+
+        <input type="radio" name="product_type" value="general" id="typeGeneral">
+        <label for="typeGeneral"><i class="fas fa-box fa-lg"></i> Others</label>
+      </div>
+
+      <!-- Bike Section -->
+      <div class="type-section active" id="sectionBike">
+        <div class="row mb-3">
+          <div class="col-md-4 form-group">
+            <label class="font-weight-bold small">Model</label>
+            <select class="form-control" id="bikeModel" onchange="fillBikeDetails(this)">
+              <option value="">Select Model</option>
+              <?php
+              $bikes = $pdo->query("SELECT id, code, name, purchase_price, color FROM products WHERE product_type='bike' AND status=1")->fetchAll();
+              foreach ($bikes as $b): ?>
+              <option value="<?=$b['id']?>" data-price="<?=$b['purchase_price']?>" data-color="<?=htmlspecialchars($b['color']??'')?>"><?=htmlspecialchars($b['name'])?> (<?=htmlspecialchars($b['code'])?>)</option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="col-md-4 form-group">
+            <label class="font-weight-bold small">Purchase Price</label>
+            <input type="number" class="form-control" id="bikePrice" step="0.01" required>
+          </div>
+          <div class="col-md-4 form-group">
+            <label class="font-weight-bold small">Color</label>
+            <input type="text" class="form-control" id="bikeColor" placeholder="Color">
+          </div>
+        </div>
+        <label class="font-weight-bold small">Enter Bike Details</label>
+        <div class="table-responsive mb-2">
+          <table class="table table-bordered table-sm" id="bikeTable">
+            <thead class="thead-light">
+              <tr><th style="width:40px;">#</th><th>Engine No.</th><th>Chassis No.</th><th style="width:50px;"></th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="text-center">1</td>
+                <td><input type="text" name="bike_engine[]" class="form-control form-control-sm" placeholder="Engine No."></td>
+                <td><input type="text" name="bike_chassis[]" class="form-control form-control-sm" placeholder="Chassis No."></td>
+                <td class="text-center"></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <button type="button" class="btn btn-sm btn-success" onclick="addBikeRow()"><i class="fas fa-plus"></i> Add Bike</button>
+        <input type="hidden" name="product_id" id="bikeProductId" value="">
+        <input type="hidden" name="purchase_price" id="bikePriceHidden" value="">
+        <input type="hidden" name="bike_color" id="bikeColorHidden" value="">
+      </div>
+
+      <!-- Mobile Section -->
+      <div class="type-section" id="sectionMobile">
+        <div class="row mb-3">
+          <div class="col-md-4 form-group">
+            <label class="font-weight-bold small">Model</label>
+            <select class="form-control" id="mobileModel" onchange="fillMobileDetails(this)">
+              <option value="">Select Model</option>
+              <?php
+              $mobiles = $pdo->query("SELECT id, code, name, purchase_price, storage, ram, product_condition FROM products WHERE product_type='mobile' AND status=1")->fetchAll();
+              foreach ($mobiles as $m): ?>
+              <option value="<?=$m['id']?>" data-price="<?=$m['purchase_price']?>" data-storage="<?=htmlspecialchars($m['storage']??'')?>" data-ram="<?=htmlspecialchars($m['ram']??'')?>" data-condition="<?=htmlspecialchars($m['product_condition']??'')?>"><?=htmlspecialchars($m['name'])?> (<?=htmlspecialchars($m['code'])?>)</option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="col-md-4 form-group">
+            <label class="font-weight-bold small">Purchase Price</label>
+            <input type="number" class="form-control" id="mobilePrice" step="0.01" required>
+          </div>
+          <div class="col-md-4 form-group">
+            <label class="font-weight-bold small">Condition</label>
+            <select class="form-control" id="mobileCondition">
+              <option value="New">New</option>
+              <option value="Used">Used</option>
+              <option value="Refurbished">Refurbished</option>
+            </select>
+          </div>
+        </div>
+        <label class="font-weight-bold small">Enter Mobile Details</label>
+        <div class="table-responsive mb-2">
+          <table class="table table-bordered table-sm" id="mobileTable">
+            <thead class="thead-light">
+              <tr><th style="width:40px;">#</th><th>IMEI No. 1</th><th>IMEI No. 2</th><th>Storage</th><th>RAM</th><th style="width:50px;"></th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="text-center">1</td>
+                <td><input type="text" name="mobile_imei1[]" class="form-control form-control-sm" placeholder="IMEI 1"></td>
+                <td><input type="text" name="mobile_imei2[]" class="form-control form-control-sm" placeholder="IMEI 2"></td>
+                <td><input type="text" name="mobile_storage[]" class="form-control form-control-sm mobileStorageFill" placeholder="Storage"></td>
+                <td><input type="text" name="mobile_ram[]" class="form-control form-control-sm mobileRamFill" placeholder="RAM"></td>
+                <td class="text-center"></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <button type="button" class="btn btn-sm btn-success" onclick="addMobileRow()"><i class="fas fa-plus"></i> Add Mobile</button>
+        <input type="hidden" name="product_id" id="mobileProductId" value="">
+        <input type="hidden" name="purchase_price" id="mobilePriceHidden" value="">
+        <input type="hidden" name="mobile_condition" id="mobileConditionHidden" value="">
+      </div>
+
+      <!-- General Section -->
+      <div class="type-section" id="sectionGeneral">
+        <div class="row">
+          <div class="col-md-4 form-group">
+            <label class="font-weight-bold small">Product</label>
+            <select name="product_id" class="form-control" id="generalProduct" onchange="fillGeneralPrice(this)">
+              <option value="">Select Product</option>
+              <?php
+              $generals = $pdo->query("SELECT id, code, name, purchase_price FROM products WHERE product_type='general' AND status=1")->fetchAll();
+              foreach ($generals as $g): ?>
+              <option value="<?=$g['id']?>" data-price="<?=$g['purchase_price']?>"><?=htmlspecialchars($g['name'])?> (<?=htmlspecialchars($g['code'])?>)</option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="col-md-4 form-group">
+            <label class="font-weight-bold small">Purchase Price</label>
+            <input type="number" name="purchase_price" class="form-control" id="generalPrice" step="0.01" required>
+          </div>
+          <div class="col-md-4 form-group">
+            <label class="font-weight-bold small">Quantity</label>
+            <input type="number" name="quantity" class="form-control" id="generalQty" value="1" min="1" required>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-md-12 form-group">
+          <label class="font-weight-bold small">Notes</label>
+          <textarea name="notes" class="form-control" rows="2" placeholder="Optional notes..."></textarea>
+        </div>
+      </div>
+
+      <hr>
+      <button type="submit" class="btn btn-primary px-4"><i class="fas fa-save"></i> Make Entry</button>
+    </form>
+  </div>
+</div>
+
+<!-- Recent Purchases -->
+<div class="card shadow mb-4">
+  <div class="card-header py-3">
+    <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-history"></i> Recent Purchases</h6>
+  </div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-bordered table-hover">
+        <thead class="thead-light">
+          <tr><th>Date</th><th>Supplier</th><th>Invoice</th><th class="text-center">Items</th><th class="text-right">Total</th><th>Status</th><th class="text-center">Actions</th></tr>
+        </thead>
+        <tbody>
+          <?php if (empty($recent)): ?>
+            <tr><td colspan="7" class="text-center text-muted">No purchases yet</td></tr>
+          <?php else: foreach ($recent as $r): ?>
+            <tr>
+              <td><?=formatDate($r['purchase_date'])?></td>
+              <td><?=htmlspecialchars($r['supplier_name']??'-')?></td>
+              <td><?=htmlspecialchars($r['invoice_no']??'-')?></td>
+              <td class="text-center"><?=$r['item_count']?></td>
+              <td class="text-right"><?=formatCurrency($r['total_amount'])?></td>
+              <td><span class="badge badge-<?=$r['status']==='received'?'success':'warning'?>"><?=ucfirst($r['status'])?></span></td>
+              <td class="text-center">
+                <a href="purchase_edit.php?id=<?=$r['id']?>" class="btn btn-sm btn-info" title="View / Edit"><i class="fas fa-eye"></i></a>
+              </td>
+            </tr>
+          <?php endforeach; endif; ?>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+function switchType(type) {
+  document.querySelectorAll('.type-section').forEach(function(s) {
+    s.classList.remove('active');
+    s.querySelectorAll('input, select, textarea').forEach(function(el) { el.disabled = true; });
+  });
+  var active = document.getElementById('section' + type.charAt(0).toUpperCase() + type.slice(1));
+  active.classList.add('active');
+  active.querySelectorAll('input, select, textarea').forEach(function(el) { el.disabled = false; });
+}
+
+document.querySelectorAll('input[name="product_type"]').forEach(function(r) {
+  r.addEventListener('change', function() { switchType(this.value); });
+});
+
+function fillBikeDetails(sel) {
+  var opt = sel.options[sel.selectedIndex];
+  document.getElementById('bikeProductId').value = opt.value || '';
+  document.getElementById('bikePrice').value = opt.value ? opt.dataset.price : '';
+  document.getElementById('bikePriceHidden').value = opt.value ? opt.dataset.price : '';
+  document.getElementById('bikeColor').value = opt.value ? opt.dataset.color : '';
+  document.getElementById('bikeColorHidden').value = opt.value ? opt.dataset.color : '';
+}
+
+function fillMobileDetails(sel) {
+  var opt = sel.options[sel.selectedIndex];
+  document.getElementById('mobileProductId').value = opt.value || '';
+  document.getElementById('mobilePrice').value = opt.value ? opt.dataset.price : '';
+  document.getElementById('mobilePriceHidden').value = opt.value ? opt.dataset.price : '';
+  document.getElementById('mobileCondition').value = opt.dataset.condition || 'New';
+  document.getElementById('mobileConditionHidden').value = opt.dataset.condition || 'New';
+  var storage = opt.dataset.storage || '';
+  var ram = opt.dataset.ram || '';
+  document.querySelectorAll('.mobileStorageFill').forEach(function(e) { if (!e.value) e.value = storage; });
+  document.querySelectorAll('.mobileRamFill').forEach(function(e) { if (!e.value) e.value = ram; });
+}
+
+function fillGeneralPrice(sel) {
+  var opt = sel.options[sel.selectedIndex];
+  document.getElementById('generalPrice').value = opt.value ? opt.dataset.price : '';
+}
+
+function addBikeRow() {
+  var tbody = document.querySelector('#bikeTable tbody');
+  var rows = tbody.querySelectorAll('tr');
+  var num = rows.length + 1;
+  var tr = document.createElement('tr');
+  tr.innerHTML = '<td class="text-center">'+num+'</td><td><input type="text" name="bike_engine[]" class="form-control form-control-sm" placeholder="Engine No."></td><td><input type="text" name="bike_chassis[]" class="form-control form-control-sm" placeholder="Chassis No."></td><td class="text-center"><button type="button" class="btn btn-sm btn-danger" onclick="this.closest(\'tr\').remove()"><i class="fas fa-times"></i></button></td>';
+  tbody.appendChild(tr);
+}
+
+function addMobileRow() {
+  var tbody = document.querySelector('#mobileTable tbody');
+  var rows = tbody.querySelectorAll('tr');
+  var num = rows.length + 1;
+  var storage = document.getElementById('mobileModel').options[document.getElementById('mobileModel').selectedIndex]?.dataset?.storage || '';
+  var ram = document.getElementById('mobileModel').options[document.getElementById('mobileModel').selectedIndex]?.dataset?.ram || '';
+  var tr = document.createElement('tr');
+  tr.innerHTML = '<td class="text-center">'+num+'</td><td><input type="text" name="mobile_imei1[]" class="form-control form-control-sm" placeholder="IMEI 1"></td><td><input type="text" name="mobile_imei2[]" class="form-control form-control-sm" placeholder="IMEI 2"></td><td><input type="text" name="mobile_storage[]" class="form-control form-control-sm mobileStorageFill" value="'+storage+'" placeholder="Storage"></td><td><input type="text" name="mobile_ram[]" class="form-control form-control-sm mobileRamFill" value="'+ram+'" placeholder="RAM"></td><td class="text-center"><button type="button" class="btn btn-sm btn-danger" onclick="this.closest(\'tr\').remove()"><i class="fas fa-times"></i></button></td>';
+  tbody.appendChild(tr);
+}
+
+switchType('bike');
+</script>
+
+<?php require_once '../../includes/footer.php'; ?>
