@@ -8,8 +8,9 @@ $id = (int)($_GET['id'] ?? 0);
 $item = getById('products', $id);
 if (!$item) redirect('products.php', 'Product not found', 'error');
 
-$categories = getAll('categories', 'name ASC');
+$categories = $pdo->query("SELECT id, name, product_type FROM categories ORDER BY name ASC")->fetchAll();
 $brands = getAll('brands', 'name ASC');
+$suppliers = getAll('suppliers', 'name ASC');
 $product_type = $item['product_type'] ?? 'general';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -28,6 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'description' => $_POST['description'] ?? '',
         'category_id' => (int)($_POST['category_id'] ?? 0) ?: null,
         'brand_id' => (int)($_POST['brand_id'] ?? 0) ?: null,
+        'supplier_id' => (int)($_POST['supplier_id'] ?? 0) ?: null,
         'engine_no' => $_POST['engine_no'] ?? '',
         'chassis_no' => $_POST['chassis_no'] ?? '',
         'color' => $_POST['color'] ?? '',
@@ -57,12 +59,12 @@ require_once '../../includes/header.php';
 .product-type-selector { text-align: right; margin-bottom: 1rem; }
 .product-type-selector label { font-weight: 600; margin-right: 0.5rem; color: #0f172a; }
 .product-type-selector select { width: auto; display: inline-block; }
-.bike-fields, .general-fields { display: none; }
-.bike-fields.active, .general-fields.active { display: block; }
+.bike-fields, .general-fields, .mobile-fields { display: none; }
+.bike-fields.active, .general-fields.active, .mobile-fields.active { display: block; }
 </style>
 
 <div class="row justify-content-center">
-  <div class="col-lg-8">
+  <div class="col-lg-12">
     <div class="card shadow mb-4">
       <div class="card-header py-3 d-flex justify-content-between align-items-center">
         <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-edit"></i> Edit Product</h6>
@@ -98,9 +100,9 @@ require_once '../../includes/header.php';
             <div class="row">
               <div class="col-md-6 form-group">
                 <label class="form-label">Category</label>
-                <select name="category_id" class="form-control">
+                <select name="category_id" class="form-control category-select">
                   <option value="">Select Category</option>
-                  <?php foreach ($categories as $c): ?><option value="<?=$c['id']?>" <?=$item['category_id']==$c['id']?'selected':''?>><?=htmlspecialchars($c['name'])?></option><?php endforeach; ?>
+                  <?php foreach ($categories as $c): ?><option value="<?=$c['id']?>" data-type="<?=$c['product_type'] ?? ''?>" <?=$item['category_id']==$c['id']?'selected':''?>><?=htmlspecialchars($c['name'])?></option><?php endforeach; ?>
                 </select>
               </div>
               <div class="col-md-6 form-group">
@@ -112,18 +114,17 @@ require_once '../../includes/header.php';
               </div>
             </div>
             <div class="row">
-              <div class="col-md-3 form-group"><label>Purchase Price</label><input type="number" name="purchase_price" class="form-control" step="0.01" min="0" value="<?=$item['purchase_price']?>"></div>
-              <div class="col-md-3 form-group"><label>Sale Price <span class="text-danger">*</span></label><input type="number" name="sale_price" class="form-control" step="0.01" min="0" value="<?=$item['sale_price']?>" required></div>
-              <div class="col-md-2 form-group"><label>Stock</label><input type="number" name="stock_quantity" class="form-control" min="0" value="<?=$item['stock_quantity']?>"></div>
-              <div class="col-md-2 form-group"><label>Min Stock</label><input type="number" name="min_stock_level" class="form-control" min="0" value="<?=$item['min_stock_level']?>"></div>
-              <div class="col-md-2 form-group">
-                <label>Unit</label>
-                <select name="unit" class="form-control">
-                  <?php foreach(['pcs','box','kg','meter','liter'] as $u): ?>
-                    <option value="<?=$u?>" <?=$item['unit']===$u?'selected':''?>><?=ucfirst($u)?></option>
-                  <?php endforeach; ?>
+              <div class="col-md-6 form-group">
+                <label class="form-label">Supplier</label>
+                <select name="supplier_id" class="form-control">
+                  <option value="">Select Supplier</option>
+                  <?php foreach ($suppliers as $s): ?><option value="<?=$s['id']?>" <?=$item['supplier_id']==$s['id']?'selected':''?>><?=htmlspecialchars($s['name'])?></option><?php endforeach; ?>
                 </select>
               </div>
+            </div>
+            <div class="row">
+              <div class="col-md-6 form-group"><label>Purchase Price</label><input type="number" name="purchase_price" class="form-control" step="0.01" min="0" value="<?=$item['purchase_price']?>"></div>
+              <div class="col-md-6 form-group"><label>Sale Price <span class="text-danger">*</span></label><input type="number" name="sale_price" class="form-control" step="0.01" min="0" value="<?=$item['sale_price']?>" required></div>
             </div>
           </div>
 
@@ -149,9 +150,18 @@ require_once '../../includes/header.php';
               </div>
               <div class="col-md-6 form-group">
                 <label class="form-label">Category <span class="text-danger">*</span></label>
-                <select name="category_id" class="form-control" required>
+                <select name="category_id" class="form-control category-select" required>
                   <option value="">Select Category</option>
-                  <?php foreach ($categories as $c): ?><option value="<?=$c['id']?>" <?=$item['category_id']==$c['id']?'selected':''?>><?=htmlspecialchars($c['name'])?></option><?php endforeach; ?>
+                  <?php foreach ($categories as $c): ?><option value="<?=$c['id']?>" data-type="<?=$c['product_type'] ?? ''?>" <?=$item['category_id']==$c['id']?'selected':''?>><?=htmlspecialchars($c['name'])?></option><?php endforeach; ?>
+                </select>
+              </div>
+            </div>
+            <div class="row">
+              <div class="col-md-6 form-group">
+                <label class="form-label">Supplier</label>
+                <select name="supplier_id" class="form-control">
+                  <option value="">Select Supplier</option>
+                  <?php foreach ($suppliers as $s): ?><option value="<?=$s['id']?>" <?=$item['supplier_id']==$s['id']?'selected':''?>><?=htmlspecialchars($s['name'])?></option><?php endforeach; ?>
                 </select>
               </div>
             </div>
@@ -182,7 +192,7 @@ require_once '../../includes/header.php';
           </div>
 
           <!-- Mobile Fields -->
-          <div class="bike-fields <?=$product_type==='mobile'?'active':''?>" id="mobileFields">
+          <div class="mobile-fields <?=$product_type==='mobile'?'active':''?>" id="mobileFields">
             <div class="row">
               <div class="col-md-4 form-group">
                 <label class="form-label">Item Code <span class="text-danger">*</span></label>
@@ -203,24 +213,29 @@ require_once '../../includes/header.php';
               </div>
               <div class="col-md-6 form-group">
                 <label class="form-label">Category <span class="text-danger">*</span></label>
-                <select name="category_id" class="form-control">
+                <select name="category_id" class="form-control category-select">
                   <option value="">Select Category</option>
-                  <?php foreach ($categories as $c): ?><option value="<?=$c['id']?>" <?=$item['category_id']==$c['id']?'selected':''?>><?=htmlspecialchars($c['name'])?></option><?php endforeach; ?>
+                  <?php foreach ($categories as $c): ?><option value="<?=$c['id']?>" data-type="<?=$c['product_type'] ?? ''?>" <?=$item['category_id']==$c['id']?'selected':''?>><?=htmlspecialchars($c['name'])?></option><?php endforeach; ?>
                 </select>
               </div>
             </div>
             <div class="row">
-              <div class="col-md-4 form-group">
+              <div class="col-md-6 form-group">
+                <label class="form-label">Supplier</label>
+                <select name="supplier_id" class="form-control">
+                  <option value="">Select Supplier</option>
+                  <?php foreach ($suppliers as $s): ?><option value="<?=$s['id']?>" <?=$item['supplier_id']==$s['id']?'selected':''?>><?=htmlspecialchars($s['name'])?></option><?php endforeach; ?>
+                </select>
+              </div>
+            </div>
+            <div class="row">
+              <div class="col-md-6 form-group">
                 <label class="form-label">IMEI No. 1 <span class="text-danger">*</span></label>
                 <input type="text" name="imei_no_1" class="form-control" value="<?=htmlspecialchars($item['imei_no_1'])?>" placeholder="IMEI number">
               </div>
-              <div class="col-md-4 form-group">
+              <div class="col-md-6 form-group">
                 <label class="form-label">IMEI No. 2</label>
                 <input type="text" name="imei_no_2" class="form-control" value="<?=htmlspecialchars($item['imei_no_2'])?>" placeholder="Second IMEI (dual SIM)">
-              </div>
-              <div class="col-md-4 form-group">
-                <label class="form-label">Color</label>
-                <input type="text" name="color" class="form-control" value="<?=htmlspecialchars($item['color'])?>" placeholder="e.g. Black, White">
               </div>
             </div>
             <div class="row">
@@ -292,7 +307,7 @@ require_once '../../includes/header.php';
 <script>
 function toggleProductType(type) {
   document.getElementById('productTypeHidden').value = type;
-  document.querySelectorAll('.general-fields, .bike-fields').forEach(function(el) {
+  document.querySelectorAll('.general-fields, .bike-fields, .mobile-fields').forEach(function(el) {
     el.classList.remove('active');
     el.querySelectorAll('input, select, textarea').forEach(function(inp) {
       inp.disabled = true;
@@ -302,6 +317,11 @@ function toggleProductType(type) {
   target.classList.add('active');
   target.querySelectorAll('input, select, textarea').forEach(function(inp) {
     inp.disabled = false;
+  });
+  target.querySelectorAll('.category-select option').forEach(function(opt) {
+    if (opt.value === '') return;
+    var optType = opt.getAttribute('data-type');
+    opt.hidden = optType !== '' && optType !== type;
   });
 }
 toggleProductType('<?=htmlspecialchars($product_type)?>');

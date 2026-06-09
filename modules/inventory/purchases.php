@@ -4,6 +4,18 @@ $page_title = 'Purchases';
 $base_url = '../../';
 require_once '../../includes/functions.php';
 
+// Handle delete
+if (isset($_GET['delete'])) {
+    $pid = (int)$_GET['delete'];
+    $pdo->prepare("UPDATE products SET stock_quantity = stock_quantity - COALESCE((SELECT SUM(quantity) FROM purchase_items WHERE purchase_id = ?), 0) WHERE id IN (SELECT product_id FROM purchase_items WHERE purchase_id = ?)")->execute([$pid, $pid]);
+    $pdo->prepare("DELETE FROM product_serials WHERE purchase_id = ?")->execute([$pid]);
+    $pdo->prepare("DELETE FROM purchase_items WHERE purchase_id = ?")->execute([$pid]);
+    $pdo->prepare("DELETE FROM purchases WHERE id = ?")->execute([$pid]);
+    $_SESSION['success'] = 'Purchase deleted successfully.';
+    header("Location: purchases.php");
+    exit;
+}
+
 $suppliers = getAll('suppliers', 'name ASC');
 
 // Handle form submission
@@ -118,8 +130,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Fetch recent purchases
-$recent = $pdo->query("SELECT p.*, s.name AS supplier_name, (SELECT COUNT(*) FROM purchase_items pi WHERE pi.purchase_id = p.id) AS item_count FROM purchases p LEFT JOIN suppliers s ON p.supplier_id = s.id ORDER BY p.created_at DESC")->fetchAll();
+// Fetch recent purchases with product info
+$recent = $pdo->query("
+    SELECT p.*, s.name AS supplier_name,
+        GROUP_CONCAT(DISTINCT pr.name SEPARATOR ', ') AS product_names,
+        GROUP_CONCAT(DISTINCT pi.quantity SEPARATOR ', ') AS product_qtys,
+        (SELECT COUNT(*) FROM purchase_items pi WHERE pi.purchase_id = p.id) AS item_count
+    FROM purchases p
+    LEFT JOIN suppliers s ON p.supplier_id = s.id
+    LEFT JOIN purchase_items pi ON pi.purchase_id = p.id
+    LEFT JOIN products pr ON pr.id = pi.product_id
+    GROUP BY p.id
+    ORDER BY p.created_at DESC
+")->fetchAll();
 
 require_once '../../includes/header.php';
 ?>
@@ -134,9 +157,54 @@ require_once '../../includes/header.php';
   .type-section.active { display: block; }
 </style>
 
-<div class="card shadow mb-4">
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h5 class="m-0 font-weight-bold" style="color:#0f172a;"><i class="fas fa-truck"></i> Purchases</h5>
+  <button class="btn btn-primary btn-sm" onclick="togglePurchaseForm()">
+    <i class="fas fa-plus" id="toggleBtnIcon"></i> New Purchase
+  </button>
+</div>
+
+<!-- Purchase List -->
+<div class="card shadow mb-4" id="purchaseHistoryCard">
+  <div class="card-header py-3 d-flex justify-content-between align-items-center">
+    <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-history"></i> Purchase History</h6>
+    <span class="text-muted small"><?= count($recent) ?> records</span>
+  </div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-bordered table-hover">
+        <thead class="thead-light">
+          <tr><th>Date</th><th>Supplier</th><th>Invoice</th><th>Product</th><th class="text-right">Qty</th><th class="text-right">Total</th><th>Status</th><th class="text-center">Actions</th></tr>
+        </thead>
+        <tbody>
+          <?php if (empty($recent)): ?>
+            <tr><td colspan="8" class="text-center text-muted">No purchases yet</td></tr>
+          <?php else: foreach ($recent as $r): ?>
+            <tr>
+              <td><?=formatDate($r['purchase_date'])?></td>
+              <td><?=htmlspecialchars($r['supplier_name']??'-')?></td>
+              <td><?=htmlspecialchars($r['invoice_no']??'-')?></td>
+              <td><?=htmlspecialchars($r['product_names']??'-')?></td>
+              <td class="text-right"><?=$r['item_count']?></td>
+              <td class="text-right"><?=formatCurrency($r['total_amount'])?></td>
+              <td><span class="badge badge-<?=$r['status']==='received'?'success':'warning'?>"><?=ucfirst($r['status'])?></span></td>
+              <td class="text-center">
+                <button type="button" class="btn btn-sm btn-info" title="View" data-id="<?=$r['id']?>" onclick="viewPurchase(this)"><i class="fas fa-eye"></i></button>
+                <a href="purchase_edit.php?id=<?=$r['id']?>" class="btn btn-sm btn-primary" title="Edit"><i class="fas fa-pen"></i></a>
+                <a href="purchases.php?delete=<?=$r['id']?>" class="btn btn-sm btn-danger" title="Delete" onclick="return confirm('Delete this purchase? This will adjust stock and remove all associated records.')"><i class="fas fa-trash"></i></a>
+              </td>
+            </tr>
+          <?php endforeach; endif; ?>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- New Purchase Form (collapsible) -->
+<div class="card shadow mb-4" id="newPurchaseCard" style="display:none;">
   <div class="card-header py-3">
-    <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-truck"></i> New Purchase Entry</h6>
+    <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-plus-circle"></i> New Purchase Entry</h6>
   </div>
   <div class="card-body">
     <form method="post">
@@ -197,6 +265,7 @@ require_once '../../includes/header.php';
           </div>
         </div>
         <label class="font-weight-bold small">Enter Bike Details</label>
+        <span class="badge badge-primary ml-2" id="bikeCount">Quantity: 1</span>
         <div class="table-responsive mb-2">
           <table class="table table-bordered table-sm" id="bikeTable">
             <thead class="thead-light">
@@ -246,6 +315,7 @@ require_once '../../includes/header.php';
           </div>
         </div>
         <label class="font-weight-bold small">Enter Mobile Details</label>
+        <span class="badge badge-primary ml-2" id="mobileCount">Quantity: 1</span>
         <div class="table-responsive mb-2">
           <table class="table table-bordered table-sm" id="mobileTable">
             <thead class="thead-light">
@@ -316,22 +386,24 @@ require_once '../../includes/header.php';
     <div class="table-responsive">
       <table class="table table-bordered table-hover">
         <thead class="thead-light">
-          <tr><th>Date</th><th>Supplier</th><th>Invoice</th><th class="text-center">Items</th><th class="text-right">Total</th><th>Status</th><th class="text-center">Actions</th></tr>
+          <tr><th>Date</th><th>Supplier</th><th>Invoice</th><th>Product</th><th class="text-right">Qty</th><th class="text-right">Total</th><th>Status</th><th class="text-center">Actions</th></tr>
         </thead>
         <tbody>
           <?php if (empty($recent)): ?>
-            <tr><td colspan="7" class="text-center text-muted">No purchases yet</td></tr>
+            <tr><td colspan="8" class="text-center text-muted">No purchases yet</td></tr>
           <?php else: foreach ($recent as $r): ?>
             <tr>
               <td><?=formatDate($r['purchase_date'])?></td>
               <td><?=htmlspecialchars($r['supplier_name']??'-')?></td>
               <td><?=htmlspecialchars($r['invoice_no']??'-')?></td>
-              <td class="text-center"><?=$r['item_count']?></td>
+              <td><?=htmlspecialchars($r['product_names']??'-')?></td>
+              <td class="text-right"><?=$r['item_count']?></td>
               <td class="text-right"><?=formatCurrency($r['total_amount'])?></td>
               <td><span class="badge badge-<?=$r['status']==='received'?'success':'warning'?>"><?=ucfirst($r['status'])?></span></td>
               <td class="text-center">
                 <button type="button" class="btn btn-sm btn-info" title="View" data-id="<?=$r['id']?>" onclick="viewPurchase(this)"><i class="fas fa-eye"></i></button>
                 <a href="purchase_edit.php?id=<?=$r['id']?>" class="btn btn-sm btn-primary" title="Edit"><i class="fas fa-pen"></i></a>
+                <a href="purchases.php?delete=<?=$r['id']?>" class="btn btn-sm btn-danger" title="Delete" onclick="return confirm('Delete this purchase?')"><i class="fas fa-trash"></i></a>
               </td>
             </tr>
           <?php endforeach; endif; ?>
@@ -359,8 +431,8 @@ document.querySelectorAll('input[name="product_type"]').forEach(function(r) {
 function fillBikeDetails(sel) {
   var opt = sel.options[sel.selectedIndex];
   document.getElementById('bikeProductId').value = opt.value || '';
-  document.getElementById('bikePrice').value = opt.value ? opt.dataset.price : '';
-  document.getElementById('bikePriceHidden').value = opt.value ? opt.dataset.price : '';
+  document.getElementById('bikePrice').value = opt.dataset.price || '';
+  document.getElementById('bikePriceHidden').value = opt.dataset.price || '';
   document.getElementById('bikeColor').value = opt.value ? opt.dataset.color : '';
   document.getElementById('bikeColorHidden').value = opt.value ? opt.dataset.color : '';
 }
@@ -368,8 +440,8 @@ function fillBikeDetails(sel) {
 function fillMobileDetails(sel) {
   var opt = sel.options[sel.selectedIndex];
   document.getElementById('mobileProductId').value = opt.value || '';
-  document.getElementById('mobilePrice').value = opt.value ? opt.dataset.price : '';
-  document.getElementById('mobilePriceHidden').value = opt.value ? opt.dataset.price : '';
+  document.getElementById('mobilePrice').value = opt.dataset.price || '';
+  document.getElementById('mobilePriceHidden').value = opt.dataset.price || '';
   document.getElementById('mobileCondition').value = opt.dataset.condition || 'New';
   document.getElementById('mobileConditionHidden').value = opt.dataset.condition || 'New';
   var storage = opt.dataset.storage || '';
@@ -379,8 +451,7 @@ function fillMobileDetails(sel) {
 }
 
 function fillGeneralPrice(sel) {
-  var opt = sel.options[sel.selectedIndex];
-  document.getElementById('generalPrice').value = opt.value ? opt.dataset.price : '';
+  document.getElementById('generalPrice').value = '';
 }
 
 function addBikeRow() {
@@ -388,8 +459,25 @@ function addBikeRow() {
   var rows = tbody.querySelectorAll('tr');
   var num = rows.length + 1;
   var tr = document.createElement('tr');
-  tr.innerHTML = '<td class="text-center">'+num+'</td><td><input type="text" name="bike_engine[]" class="form-control form-control-sm" placeholder="Engine No."></td><td><input type="text" name="bike_chassis[]" class="form-control form-control-sm" placeholder="Chassis No."></td><td class="text-center"><button type="button" class="btn btn-sm btn-danger" onclick="this.closest(\'tr\').remove()"><i class="fas fa-times"></i></button></td>';
+  tr.innerHTML = '<td class="text-center">'+num+'</td><td><input type="text" name="bike_engine[]" class="form-control form-control-sm" placeholder="Engine No."></td><td><input type="text" name="bike_chassis[]" class="form-control form-control-sm" placeholder="Chassis No."></td><td class="text-center"><button type="button" class="btn btn-sm btn-danger" onclick="removeBikeRow(this)"><i class="fas fa-times"></i></button></td>';
   tbody.appendChild(tr);
+  updateBikeCount();
+}
+
+function removeBikeRow(btn) {
+  btn.closest('tr').remove();
+  renumberBikeRows();
+  updateBikeCount();
+}
+
+function renumberBikeRows() {
+  var rows = document.querySelectorAll('#bikeTable tbody tr');
+  rows.forEach(function(r, i) { r.cells[0].textContent = i + 1; });
+}
+
+function updateBikeCount() {
+  var count = document.querySelectorAll('#bikeTable tbody tr').length;
+  document.getElementById('bikeCount').textContent = 'Quantity: ' + count;
 }
 
 function addMobileRow() {
@@ -399,11 +487,47 @@ function addMobileRow() {
   var storage = document.getElementById('mobileModel').options[document.getElementById('mobileModel').selectedIndex]?.dataset?.storage || '';
   var ram = document.getElementById('mobileModel').options[document.getElementById('mobileModel').selectedIndex]?.dataset?.ram || '';
   var tr = document.createElement('tr');
-  tr.innerHTML = '<td class="text-center">'+num+'</td><td><input type="text" name="mobile_imei1[]" class="form-control form-control-sm" placeholder="IMEI 1"></td><td><input type="text" name="mobile_imei2[]" class="form-control form-control-sm" placeholder="IMEI 2"></td><td><input type="text" name="mobile_storage[]" class="form-control form-control-sm mobileStorageFill" value="'+storage+'" placeholder="Storage"></td><td><input type="text" name="mobile_ram[]" class="form-control form-control-sm mobileRamFill" value="'+ram+'" placeholder="RAM"></td><td class="text-center"><button type="button" class="btn btn-sm btn-danger" onclick="this.closest(\'tr\').remove()"><i class="fas fa-times"></i></button></td>';
+  tr.innerHTML = '<td class="text-center">'+num+'</td><td><input type="text" name="mobile_imei1[]" class="form-control form-control-sm" placeholder="IMEI 1"></td><td><input type="text" name="mobile_imei2[]" class="form-control form-control-sm" placeholder="IMEI 2"></td><td><input type="text" name="mobile_storage[]" class="form-control form-control-sm mobileStorageFill" value="'+storage+'" placeholder="Storage"></td><td><input type="text" name="mobile_ram[]" class="form-control form-control-sm mobileRamFill" value="'+ram+'" placeholder="RAM"></td><td class="text-center"><button type="button" class="btn btn-sm btn-danger" onclick="removeMobileRow(this)"><i class="fas fa-times"></i></button></td>';
   tbody.appendChild(tr);
+  updateMobileCount();
+}
+
+function removeMobileRow(btn) {
+  btn.closest('tr').remove();
+  renumberMobileRows();
+  updateMobileCount();
+}
+
+function renumberMobileRows() {
+  var rows = document.querySelectorAll('#mobileTable tbody tr');
+  rows.forEach(function(r, i) { r.cells[0].textContent = i + 1; });
+}
+
+function updateMobileCount() {
+  var count = document.querySelectorAll('#mobileTable tbody tr').length;
+  document.getElementById('mobileCount').textContent = 'Quantity: ' + count;
 }
 
 switchType('bike');
+updateBikeCount();
+updateMobileCount();
+
+function togglePurchaseForm() {
+  var form = document.getElementById('newPurchaseCard');
+  var history = document.getElementById('purchaseHistoryCard');
+  var icon = document.getElementById('toggleBtnIcon');
+  if (form.style.display === 'none') {
+    form.style.display = '';
+    history.style.display = 'none';
+    icon.classList.remove('fa-plus');
+    icon.classList.add('fa-minus');
+  } else {
+    form.style.display = 'none';
+    history.style.display = '';
+    icon.classList.remove('fa-minus');
+    icon.classList.add('fa-plus');
+  }
+}
 </script>
 
 <!-- Purchase Detail Modal -->

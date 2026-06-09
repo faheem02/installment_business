@@ -98,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_payment'])) {
                 'updated_at' => date('Y-m-d'),
             ], $installment_id);
 
-            insert('payments', [
+            $payment_id = insert('payments', [
                 'sale_id' => $inst['sale_id'],
                 'installment_id' => $installment_id,
                 'payment_date' => $pay_date,
@@ -109,6 +109,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_payment'])) {
                 'received_by' => (int)($_POST['created_by'] ?? $_SESSION['user_id'] ?? 1),
                 'created_at' => date('Y-m-d'),
             ]);
+
+            if ($method === 'cash') {
+                recordCashInflow($pdo, $pay_date, $amount, 'Installment - Customer #' . $id, 'payment', $payment_id, (int)($_POST['created_by'] ?? $_SESSION['user_id'] ?? 1));
+            } elseif ($method === 'card') {
+                recordBankInflow($pdo, $pay_date, $amount, 'Installment (card) - Customer #' . $id, 'payment', $payment_id, (int)($_POST['created_by'] ?? $_SESSION['user_id'] ?? 1));
+            }
 
             $_SESSION['success'] = 'Payment recorded for installment #' . $inst['installment_no'];
         } else {
@@ -243,6 +249,18 @@ $all_items->execute([$id]);
 $all_items_data = $all_items->fetch();
 $total_products_qty = (int)($all_items_data['total_qty'] ?? 0);
 $total_distinct_products = (int)($all_items_data['distinct_products'] ?? 0);
+
+// Products purchased list with names
+$products_purchased = $pdo->prepare("
+    SELECT p.name, p.code, p.product_type, SUM(si.quantity) AS qty
+    FROM sale_items si
+    JOIN products p ON si.product_id = p.id
+    WHERE si.sale_id IN (SELECT id FROM sales WHERE customer_id = ?)
+    GROUP BY si.product_id
+    ORDER BY qty DESC
+");
+$products_purchased->execute([$id]);
+$products_purchased = $products_purchased->fetchAll();
 
 $tab = $_GET['tab'] ?? 'overview';
 
@@ -412,6 +430,37 @@ require_once '../../includes/header.php';
                         <div class="progress-bar bg-<?= $s_pct >= 100 ? 'success' : 'primary' ?>" style="width:<?= $s_pct ?>%;"><?= $s_pct ?>%</div>
                       </div>
                     </td>
+                  </tr>
+                <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
+        <?php endif; ?>
+      </div>
+    </div>
+
+    <!-- Products Purchased -->
+    <div class="card shadow mt-4">
+      <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-success"><i class="fas fa-boxes"></i> Products Purchased (<?=$total_distinct_products?> kinds)</h6>
+      </div>
+      <div class="card-body">
+        <?php if (empty($products_purchased)): ?>
+          <p class="text-muted mb-0 text-center">No products purchased</p>
+        <?php else: ?>
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered mb-0">
+              <thead class="thead-light">
+                <tr><th>#</th><th>Product</th><th>Code</th><th>Type</th><th class="text-center">Qty</th></tr>
+              </thead>
+              <tbody>
+                <?php $i = 1; foreach ($products_purchased as $pp): ?>
+                  <tr>
+                    <td><?=$i++?></td>
+                    <td class="font-weight-bold"><?=htmlspecialchars($pp['name'])?></td>
+                    <td><span class="badge badge-secondary"><?=htmlspecialchars($pp['code'])?></span></td>
+                    <td><span class="badge badge-info"><?=ucfirst($pp['product_type'])?></span></td>
+                    <td class="text-center font-weight-bold"><?=(int)$pp['qty']?></td>
                   </tr>
                 <?php endforeach; ?>
               </tbody>
@@ -630,17 +679,19 @@ require_once '../../includes/header.php';
 
 <?php elseif ($tab === 'payments'): ?>
 <div class="row">
-  <!-- LEFT: Sale selector + Installment detail + Payment form -->
+  <!-- LEFT: Collect Installment -->
   <div class="col-lg-5 mb-4">
-    <div class="card shadow">
-      <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-success"><i class="fas fa-hand-holding-usd"></i> Collect Installment</h6></div>
+    <div class="card shadow h-100">
+      <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-success"><i class="fas fa-hand-holding-usd"></i> Collect Installment</h6>
+      </div>
       <div class="card-body">
         <?php if (empty($installment_sales)): ?>
-          <p class="text-muted mb-0 text-center">No active installment sales for this customer.</p>
+          <p class="text-muted mb-0 text-center py-3">No active installment sales for this customer.</p>
         <?php else: ?>
         <form method="post" id="paymentForm">
           <div class="form-group mb-3">
-            <label class="small text-muted font-weight-bold">Select Sale <span class="text-danger">*</span></label>
+            <label class="small font-weight-bold text-muted">Select Sale</label>
             <select name="sale_id" id="saleSelector" class="form-control" required>
               <option value="">-- Choose a sale --</option>
               <?php foreach ($installment_sales as $s):
@@ -666,17 +717,14 @@ require_once '../../includes/header.php';
             </select>
           </div>
 
-          <!-- Sale Detail + Payment Form (shown when sale selected) -->
           <div id="saleDetail" style="display:none;">
             <!-- Purchased Items -->
-            <div class="card bg-light mb-2">
-              <div class="card-body py-2">
-                <div class="d-flex justify-content-between align-items-center mb-1">
-                  <span class="small font-weight-bold text-muted">Purchased Items</span>
-                  <span class="small font-weight-bold" id="detailSaleLabel"></span>
-                </div>
-                <div id="detailItems" class="small"></div>
+            <div class="bg-light rounded p-2 mb-2 border">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <span class="small font-weight-bold text-muted">Purchased Items</span>
+                <span class="small font-weight-bold" id="detailSaleLabel"></span>
               </div>
+              <div id="detailItems" class="small"></div>
             </div>
 
             <!-- Installment Progress -->
@@ -684,48 +732,49 @@ require_once '../../includes/header.php';
               <span class="text-muted">Paid Installments</span>
               <span class="font-weight-bold" id="progressLabel">0/0</span>
             </div>
-            <div class="progress mb-2" style="height:6px;">
+            <div class="progress mb-3" style="height:8px;">
               <div class="progress-bar bg-success" id="progressBar" style="width:0%;"></div>
             </div>
 
-            <!-- This Month's Installment -->
-            <div id="currentDueCard" class="card border-left-success mb-2" style="display:none;">
-              <div class="card-body py-2">
-                <div class="d-flex justify-content-between">
-                  <span class="text-muted small">This Month's Installment</span>
+            <!-- Current Due Installment -->
+            <div id="currentDueCard" class="card border-left-success mb-3" style="display:none;">
+              <div class="card-body py-3">
+                <div class="d-flex justify-content-between small">
+                  <span class="text-muted">Installment</span>
                   <span class="font-weight-bold text-primary" id="dueInstLabel">#0</span>
                 </div>
-                <div class="d-flex justify-content-between align-items-center">
-                  <span class="text-muted small">Due Date</span>
+                <div class="d-flex justify-content-between small">
+                  <span class="text-muted">Due Date</span>
                   <span class="font-weight-bold" id="dueDateLabel">-</span>
                 </div>
-                <div class="d-flex justify-content-between align-items-center mt-1" style="font-size:1.3rem;">
-                  <span class="font-weight-bold">Due Amount</span>
-                  <span class="font-weight-bold text-success" id="dueAmountLabel">0.00</span>
+                <hr class="my-2">
+                <div class="d-flex justify-content-between align-items-center">
+                  <span class="h5 mb-0 font-weight-bold">Due Amount</span>
+                  <span class="h4 mb-0 font-weight-bold text-success" id="dueAmountLabel">0.00</span>
                 </div>
                 <input type="hidden" name="installment_id" id="selectedInstallmentId" value="">
               </div>
             </div>
 
-            <!-- All installments paid message -->
+            <!-- All paid message -->
             <div id="allPaidMsg" class="alert alert-success py-2 small" style="display:none;">
               <i class="fas fa-check-circle"></i> All installments have been paid for this sale.
             </div>
 
-            <!-- Payment Form Fields -->
+            <!-- Payment Form -->
             <div id="paymentFields" style="display:none;">
               <hr class="my-2">
               <h6 class="font-weight-bold text-success mb-2"><i class="fas fa-money-bill-wave"></i> Record Payment</h6>
               <div class="row">
                 <div class="col-6">
                   <div class="form-group mb-2">
-                    <label class="small text-muted">Date <span class="text-danger">*</span></label>
+                    <label class="small text-muted">Date</label>
                     <input type="date" name="payment_date" class="form-control" value="<?= date('Y-m-d') ?>" required>
                   </div>
                 </div>
                 <div class="col-6">
                   <div class="form-group mb-2">
-                    <label class="small text-muted">Method <span class="text-danger">*</span></label>
+                    <label class="small text-muted">Method</label>
                     <select name="payment_method" class="form-control" required>
                       <option value="cash">Cash</option>
                       <option value="card">Card</option>
@@ -735,7 +784,7 @@ require_once '../../includes/header.php';
                 </div>
               </div>
               <div class="form-group mb-2">
-                <label class="small text-muted">Payment Amount <span class="text-danger">*</span></label>
+                <label class="small text-muted">Payment Amount</label>
                 <input type="number" name="amount" id="payAmount" class="form-control form-control-lg font-weight-bold" step="0.01" min="0.01" required>
                 <small class="text-muted" id="newRemainingHint" style="display:none;">Remaining after this: <span class="font-weight-bold text-info" id="newRemainingAmount">0.00</span></small>
               </div>
@@ -743,12 +792,12 @@ require_once '../../includes/header.php';
                 <div class="col-6">
                   <div class="form-group mb-2">
                     <label class="small text-muted">Notes</label>
-                    <textarea name="notes" class="form-control" rows="1"></textarea>
+                    <textarea name="notes" class="form-control" rows="1" placeholder="Optional notes"></textarea>
                   </div>
                 </div>
                 <div class="col-6">
                   <div class="form-group mb-2">
-                    <label class="small text-muted">By <span class="text-danger">*</span></label>
+                    <label class="small text-muted">Recorded By</label>
                     <select name="created_by" class="form-control" required>
                       <?php foreach ($users as $u): ?>
                         <option value="<?= $u['id'] ?>" <?= ($u['id'] == ($_SESSION['user_id'] ?? 1)) ? 'selected' : '' ?>><?= htmlspecialchars($u['username']) ?></option>
@@ -757,7 +806,7 @@ require_once '../../includes/header.php';
                   </div>
                 </div>
               </div>
-              <button type="submit" name="save_payment" class="btn btn-success btn-block"><i class="fas fa-save"></i> Record Payment</button>
+              <button type="submit" name="save_payment" class="btn btn-success btn-block py-2 font-weight-bold"><i class="fas fa-save"></i> Record Payment</button>
             </div>
           </div>
         </form>
@@ -770,15 +819,15 @@ require_once '../../includes/header.php';
   <div class="col-lg-7 mb-4">
     <div class="card shadow">
       <div class="card-header py-3 d-flex justify-content-between align-items-center">
-        <h6 class="m-0 font-weight-bold text-success"><i class="fas fa-history"></i> Installment History</h6>
-        <span class="badge badge-success status-badge">Total Paid: <?= formatCurrency(array_sum(array_column($installments_data, 'paid_amount'))) ?></span>
+        <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-history"></i> Installment History</h6>
+        <span class="badge badge-success" style="font-size:0.85rem;padding:6px 12px;">Total Paid: <?= formatCurrency(array_sum(array_column($installments_data, 'paid_amount'))) ?></span>
       </div>
       <div class="card-body">
         <?php if (empty($installments_data)): ?>
-          <p class="text-muted mb-0 text-center">No installment records found</p>
+          <p class="text-muted mb-0 text-center py-3">No installment records found</p>
         <?php else: ?>
         <div class="table-responsive">
-          <table class="table table-bordered table-hover table-sm">
+          <table class="table table-bordered table-hover table-sm mb-0">
             <thead class="thead-light">
               <tr>
                 <th>Sale</th>
@@ -789,7 +838,7 @@ require_once '../../includes/header.php';
                 <th class="text-right">Balance</th>
                 <th>Status</th>
                 <th>Paid Date</th>
-                <th>Action</th>
+                <th class="text-center">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -807,14 +856,14 @@ require_once '../../includes/header.php';
                   <td class="text-right text-success font-weight-bold"><?= formatCurrency($inst['paid_amount']) ?></td>
                   <td class="text-right <?= $inst['balance'] > 0 ? 'text-danger' : 'text-muted' ?>"><?= formatCurrency($inst['balance']) ?></td>
                   <td>
-                    <span class="badge badge-<?= $inst['status'] === 'paid' ? 'success' : ($inst['status'] === 'partial' ? 'warning' : ($inst['status'] === 'overdue' ? 'danger' : 'secondary')) ?> status-badge">
+                    <span class="badge badge-<?= $inst['status'] === 'paid' ? 'success' : ($inst['status'] === 'partial' ? 'warning' : ($inst['status'] === 'overdue' ? 'danger' : 'secondary')) ?>">
                       <?= ucfirst($inst['status']) ?>
                     </span>
                   </td>
                   <td><?= $inst['paid_date'] ? formatDate($inst['paid_date']) : '-' ?></td>
-                  <td>
+                  <td class="text-center">
                     <?php if ($inst['paid_amount'] > 0): ?>
-                      <a href="view.php?id=<?= $id ?>&tab=payments&del_inst_payment=<?= $inst['id'] ?>" class="btn btn-sm btn-danger" onclick="return confirm('Delete all payments for installment #<?= $inst['installment_no'] ?>?')"><i class="fas fa-trash"></i></a>
+                      <a href="view.php?id=<?= $id ?>&tab=payments&del_inst_payment=<?= $inst['id'] ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete all payments for installment #<?= $inst['installment_no'] ?>?')"><i class="fas fa-trash"></i></a>
                     <?php else: ?>
                       <span class="text-muted small">-</span>
                     <?php endif; ?>

@@ -62,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'updated_at' => date('Y-m-d'),
         ], $pay_installment_id);
 
-        insert('payments', [
+        $payment_id = insert('payments', [
             'sale_id' => $inst['sale_id'],
             'installment_id' => $pay_installment_id,
             'payment_date' => $payment_date,
@@ -75,6 +75,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'received_by' => $_SESSION['user_id'] ?? null,
             'created_at' => date('Y-m-d'),
         ]);
+
+        if ($payment_method === 'cash') {
+            recordCashInflow($pdo, $payment_date, $pay_amount, 'Installment - Sale #' . $inst['sale_id'], 'payment', $payment_id, $_SESSION['user_id'] ?? null);
+        } elseif ($payment_method === 'card') {
+            recordBankInflow($pdo, $payment_date, $pay_amount, 'Installment (card) - Sale #' . $inst['sale_id'], 'payment', $payment_id, $_SESSION['user_id'] ?? null);
+        }
 
         $msg = "Payment of " . formatCurrency($pay_amount) . " recorded for installment #{$inst['installment_no']}.";
         redirect("schedules.php?sale_id={$inst['sale_id']}", $msg);

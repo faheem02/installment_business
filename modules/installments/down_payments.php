@@ -17,9 +17,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Create a quick sale record for this down payment
     $sale_id = insert('sales', [
         'customer_id' => $customer_id,
+        'invoice_no' => 'DP-' . date('ymd') . '-' . time(),
         'total_amount' => $amount,
         'down_payment' => $amount,
-        'balance' => 0,
         'sale_date' => $payment_date,
         'status' => 'completed',
         'branch_id' => 1,
@@ -29,7 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ]);
 
     // Record the payment
-    insert('payments', [
+    $payment_id = insert('payments', [
         'sale_id' => $sale_id,
         'payment_date' => $payment_date,
         'amount' => $amount,
@@ -41,6 +41,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'received_by' => 1,
         'created_at' => date('Y-m-d'),
     ]);
+
+    if ($payment_method === 'cash') {
+        recordCashInflow($pdo, $payment_date, $amount, 'Down payment - ' . ($notes ?: 'Customer'), 'payment', $payment_id, 1);
+    } elseif ($payment_method === 'card') {
+        recordBankInflow($pdo, $payment_date, $amount, 'Down payment (card) - ' . ($notes ?: 'Customer'), 'payment', $payment_id, 1);
+    }
 
     redirect('down_payments.php', 'Down payment of ' . number_format($amount, 2) . ' recorded');
 }

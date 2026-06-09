@@ -97,6 +97,68 @@ function customerName($id) {
     return $c ? $c['full_name'] : 'N/A';
 }
 
+// Record a cash inflow in cash book
+function recordCashInflow($pdo, $date, $amount, $description, $reference_type = null, $reference_id = null, $created_by = null) {
+    $today = $date ?: date('Y-m-d');
+    $daily = $pdo->prepare("SELECT * FROM cash_book_daily WHERE date = ?");
+    $daily->execute([$today]);
+    $daily_rec = $daily->fetch();
+
+    if ($daily_rec) {
+        $daily_id = $daily_rec['id'];
+    } else {
+        $prev = $pdo->query("SELECT closing_balance FROM cash_book_daily WHERE date < '$today' ORDER BY date DESC LIMIT 1")->fetch();
+        $opening = $prev ? (float)$prev['closing_balance'] : 0;
+        $daily_id = insert('cash_book_daily', [
+            'date' => $today,
+            'opening_balance' => $opening,
+            'total_inflow' => 0,
+            'total_outflow' => 0,
+            'closing_balance' => $opening,
+            'status' => 'open',
+            'created_by' => $created_by,
+            'created_at' => date('Y-m-d'),
+        ]);
+    }
+
+    insert('cash_book', [
+        'daily_id' => $daily_id,
+        'transaction_date' => $today,
+        'transaction_type' => 'inflow',
+        'amount' => $amount,
+        'description' => $description,
+        'reference_type' => $reference_type,
+        'reference_id' => $reference_id,
+        'created_by' => $created_by,
+        'created_at' => date('Y-m-d'),
+    ]);
+
+    $update = $pdo->prepare("UPDATE cash_book_daily SET total_inflow = total_inflow + ?, closing_balance = opening_balance + total_inflow - total_outflow WHERE id = ?");
+    $update->execute([$amount, $daily_id]);
+}
+
+// Record bank inflow (for card payments)
+function recordBankInflow($pdo, $date, $amount, $description, $reference_type = null, $reference_id = null, $created_by = null) {
+    $stmt = $pdo->query("SELECT id, current_balance FROM bank_accounts WHERE status = 1 ORDER BY id ASC LIMIT 1");
+    $account = $stmt->fetch();
+    if (!$account) return null;
+
+    insert('bank_transactions', [
+        'bank_account_id' => $account['id'],
+        'transaction_date' => $date,
+        'transaction_type' => 'deposit',
+        'amount' => $amount,
+        'description' => $description,
+        'reference_type' => $reference_type,
+        'reference_id' => $reference_id,
+        'created_by' => $created_by ?: 1,
+        'created_at' => date('Y-m-d'),
+    ]);
+
+    $pdo->prepare("UPDATE bank_accounts SET current_balance = current_balance + ? WHERE id = ?")->execute([$amount, $account['id']]);
+    return $account['id'];
+}
+
 // Redirect with message
 function redirect($url, $msg = null, $type = 'success') {
     if ($msg) {

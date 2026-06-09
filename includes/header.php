@@ -82,8 +82,8 @@
       <div class="collapse" id="collapseSales">
         <div class="collapse-inner">
           <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'sales/index.php') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/sales/index.php"><i class="fas fa-plus-circle"></i> New Sale</a>
-          <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'sales/item_code.php') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/sales/item_code.php"><i class="fas fa-barcode"></i> Item Code</a>
           <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'sales/invoices') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/sales/invoices.php"><i class="fas fa-file-invoice"></i> Invoices</a>
+          <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'sales/discount') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/sales/discounts.php"><i class="fas fa-percent"></i> Discounts</a>
         </div>
       </div>
     </div>
@@ -100,7 +100,6 @@
           <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'installments/plan') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/installments/plans.php"><i class="fas fa-table"></i> Plans</a>
           <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'installments/down_payments') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/installments/down_payments.php"><i class="fas fa-hand-holding-usd"></i> Down Payments</a>
           <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'installments/schedules') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/installments/schedules.php"><i class="fas fa-calendar-alt"></i> Schedules & Balance</a>
-          <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'installments/emi_calculator') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/installments/emi_calculator.php"><i class="fas fa-calculator"></i> EMI Calc.</a>
           <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'installments/late') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/installments/late_payments.php"><i class="fas fa-exclamation-triangle"></i> Late Payments</a>
         </div>
       </div>
@@ -150,7 +149,7 @@
       </a>
       <div class="collapse" id="collapsePayment">
         <div class="collapse-inner">
-          <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'payments') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/payments/index.php"><i class="fas fa-receipt"></i> Receipts</a>
+          <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'payments/index') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/payments/index.php"><i class="fas fa-receipt"></i> Receipts</a>
           <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'daily') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/payments/daily.php"><i class="fas fa-coins"></i> Daily Collection</a>
         </div>
       </div>

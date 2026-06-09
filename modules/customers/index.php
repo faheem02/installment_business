@@ -25,6 +25,11 @@ require_once '../../includes/header.php';
     </a>
   </div>
   <div class="card-body">
+    <div class="row mb-3">
+      <div class="col-md-4">
+        <input type="text" id="customerSearch" class="form-control" placeholder="Search by name, phone, CNIC, or customer no..." autofocus>
+      </div>
+    </div>
     <div class="table-responsive">
       <table class="table table-bordered table-hover" id="dataTable" width="100%" cellspacing="0">
         <thead>
@@ -88,3 +93,15 @@ require_once '../../includes/header.php';
 </div>
 
 <?php require_once '../../includes/footer.php'; ?>
+
+<script>
+$(document).ready(function() {
+    $('#customerSearch').on('keyup', function() {
+        var q = $(this).val().toLowerCase();
+        $('#dataTable tbody tr').each(function() {
+            var text = $(this).text().toLowerCase();
+            $(this).toggle(text.indexOf(q) > -1);
+        });
+    });
+});
+</script>
