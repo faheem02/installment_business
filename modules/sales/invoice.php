@@ -79,11 +79,12 @@ $title = 'Invoice #' . htmlspecialchars($sale['invoice_no']);
     </thead>
     <tbody>
       <?php $i=1; foreach($items as $item):
-        $prod = getById('products', $item['product_id']);
+        $prodName = $item['item_description'] ?: (($p = getById('products', $item['product_id'])) ? $p['name'] : 'Item');
+        $prodCode = $item['item_description'] ? '' : (($p ?? null) ? ($p['code']??'') : '');
       ?>
       <tr>
         <td class="text-center"><?=$i++?></td>
-        <td><?=htmlspecialchars($prod['name']??'Unknown')?> <small class="text-muted d-block"><?=htmlspecialchars($prod['code']??'')?></small></td>
+        <td><?=htmlspecialchars($prodName)?> <?php if ($prodCode): ?><small class="text-muted d-block"><?=htmlspecialchars($prodCode)?></small><?php endif; ?></td>
         <td class="text-center"><?=$item['quantity']?></td>
         <td class="text-right"><?=formatCurrency($item['price'])?></td>
         <td class="text-right"><?=formatCurrency($item['subtotal'])?></td>
@@ -104,6 +105,14 @@ $title = 'Invoice #' . htmlspecialchars($sale['invoice_no']);
         <tr class="font-weight-bold" style="font-size:1.15rem;"><td>Total</td><td style="color:#0f172a;"><?=formatCurrency($sale['total_amount'])?></td></tr>
         <tr><td>Down Payment</td><td><?=formatCurrency($sale['down_payment'])?></td></tr>
         <tr class="font-weight-bold text-primary"><td>Financed</td><td><?=formatCurrency($sale['financed_amount'])?></td></tr>
+        <?php
+        $total_inst_paid = 0;
+        foreach ($payments as $p) { $total_inst_paid += (float)$p['amount']; }
+        $total_paid = (float)$sale['down_payment'] + $total_inst_paid;
+        $remaining = max(0, (float)$sale['total_amount'] - $total_paid);
+        ?>
+        <tr><td>Total Paid</td><td class="text-success font-weight-bold"><?=formatCurrency($total_paid)?></td></tr>
+        <tr class="<?=$remaining>0?'text-danger font-weight-bold':''?>"><td>Remaining</td><td><?=formatCurrency($remaining)?></td></tr>
       </table>
     </div>
   </div>

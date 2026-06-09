@@ -62,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         $pdo->beginTransaction();
 
-        $stmt = $pdo->prepare("INSERT INTO purchases (supplier_id, invoice_no, purchase_date, total_amount, paid_amount, due_amount, status, notes, created_by, created_at) VALUES (?, ?, ?, ?, 0, ?, 'received', ?, ?, NOW())");
+        $stmt = $pdo->prepare("INSERT INTO purchases (supplier_id, invoice_no, purchase_date, total_amount, paid_amount, due_amount, status, notes, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, 0, ?, 'received', ?, ?, NOW(), NOW())");
         $stmt->execute([$supplier_id ?: null, $invoice_no, $purchase_date, $subtotal, $subtotal, $notes, $_SESSION['user_id'] ?? 1]);
         $purchase_id = $pdo->lastInsertId();
 
@@ -82,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $cha = $chassis[$i] ?? '';
                 $serial = $eng ?: $cha;
                 if ($serial) {
-                    $stmt = $pdo->prepare("INSERT INTO product_serials (product_id, serial_number, purchase_id, status, notes, created_at) VALUES (?, ?, ?, 'available', ?, NOW())");
+                    $stmt = $pdo->prepare("INSERT INTO product_serials (product_id, serial_number, purchase_id, status, notes, created_at, updated_at) VALUES (?, ?, ?, 'available', ?, NOW(), NOW())");
                     $stmt->execute([$product_id, $serial, $purchase_id, "Bike $color - $cha"]);
                 }
             }
@@ -98,11 +98,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $st = $storages[$i] ?? '';
                 $ra = $rams[$i] ?? '';
                 if ($i1) {
-                    $stmt = $pdo->prepare("INSERT INTO product_serials (product_id, imei_number, purchase_id, status, notes, created_at) VALUES (?, ?, ?, 'available', ?, NOW())");
+                    $stmt = $pdo->prepare("INSERT INTO product_serials (product_id, imei_number, purchase_id, status, notes, created_at, updated_at) VALUES (?, ?, ?, 'available', ?, NOW(), NOW())");
                     $stmt->execute([$product_id, $i1, $purchase_id, "Mobile - $st/$ra - $cond"]);
                 }
                 if ($i2) {
-                    $stmt = $pdo->prepare("INSERT INTO product_serials (product_id, imei_number, purchase_id, status, created_at) VALUES (?, ?, ?, 'available', NOW())");
+                    $stmt = $pdo->prepare("INSERT INTO product_serials (product_id, imei_number, purchase_id, status, created_at, updated_at) VALUES (?, ?, ?, 'available', NOW(), NOW())");
                     $stmt->execute([$product_id, $i2, $purchase_id]);
                 }
             }
@@ -330,7 +330,8 @@ require_once '../../includes/header.php';
               <td class="text-right"><?=formatCurrency($r['total_amount'])?></td>
               <td><span class="badge badge-<?=$r['status']==='received'?'success':'warning'?>"><?=ucfirst($r['status'])?></span></td>
               <td class="text-center">
-                <a href="purchase_edit.php?id=<?=$r['id']?>" class="btn btn-sm btn-info" title="View / Edit"><i class="fas fa-eye"></i></a>
+                <button type="button" class="btn btn-sm btn-info" title="View" data-id="<?=$r['id']?>" onclick="viewPurchase(this)"><i class="fas fa-eye"></i></button>
+                <a href="purchase_edit.php?id=<?=$r['id']?>" class="btn btn-sm btn-primary" title="Edit"><i class="fas fa-pen"></i></a>
               </td>
             </tr>
           <?php endforeach; endif; ?>
@@ -403,6 +404,107 @@ function addMobileRow() {
 }
 
 switchType('bike');
+</script>
+
+<!-- Purchase Detail Modal -->
+<div class="modal fade" id="purchaseModal" tabindex="-1" role="dialog" aria-labelledby="purchaseModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="purchaseModalLabel"><i class="fas fa-truck"></i> Purchase Details</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body" id="purchaseModalBody">
+        <div class="text-center py-4">
+          <i class="fas fa-spinner fa-spin fa-2x"></i>
+          <p class="mt-2 text-muted">Loading...</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+        <a href="#" id="purchaseEditLink" class="btn btn-primary"><i class="fas fa-pen"></i> Edit</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function viewPurchase(btn) {
+    var id = btn.getAttribute('data-id');
+    document.getElementById('purchaseEditLink').href = 'purchase_edit.php?id=' + id;
+    document.getElementById('purchaseModalBody').innerHTML =
+        '<div class="text-center py-4"><i class="fas fa-spinner fa-spin fa-2x"></i><p class="mt-2 text-muted">Loading...</p></div>';
+    $('#purchaseModal').modal('show');
+
+    fetch('purchase_view.php?id=' + id)
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d.error) {
+                document.getElementById('purchaseModalBody').innerHTML = '<div class="alert alert-danger">' + d.error + '</div>';
+                return;
+            }
+            var badge = d.status === 'received' ? 'success' : (d.status === 'cancelled' ? 'danger' : 'warning');
+            var html = '';
+
+            // Header info
+            html += '<div class="row mb-3">';
+            html += '<div class="col-md-3"><small class="text-muted">Date</small><p class="font-weight-bold mb-0">' + d.purchase_date + '</p></div>';
+            html += '<div class="col-md-3"><small class="text-muted">Supplier</small><p class="font-weight-bold mb-0">' + escapeHtml(d.supplier_name) + '</p></div>';
+            html += '<div class="col-md-3"><small class="text-muted">Invoice No.</small><p class="font-weight-bold mb-0">' + escapeHtml(d.invoice_no || '-') + '</p></div>';
+            html += '<div class="col-md-3"><small class="text-muted">Status</small><p class="mb-0"><span class="badge badge-' + badge + '">' + d.status.charAt(0).toUpperCase() + d.status.slice(1) + '</span></p></div>';
+            html += '</div>';
+
+            if (d.notes) {
+                html += '<div class="mb-3"><small class="text-muted">Notes</small><p class="mb-0">' + escapeHtml(d.notes) + '</p></div>';
+            }
+
+            // Items
+            html += '<h6 class="font-weight-bold" style="color:#0f172a;">Items</h6>';
+            html += '<div class="table-responsive"><table class="table table-bordered table-sm"><thead class="thead-light"><tr><th>Product</th><th>Type</th><th class="text-center">Qty</th><th class="text-right">Price</th><th class="text-right">Subtotal</th></tr></thead><tbody>';
+            for (var i = 0; i < d.items.length; i++) {
+                var it = d.items[i];
+                html += '<tr><td>' + escapeHtml(it.product_name) + '<br><small class="text-muted">' + escapeHtml(it.product_code) + '</small></td>';
+                html += '<td><span class="badge badge-info">' + escapeHtml(it.product_type) + '</span></td>';
+                html += '<td class="text-center">' + it.quantity + '</td>';
+                html += '<td class="text-right">' + formatNum(it.purchase_price) + '</td>';
+                html += '<td class="text-right">' + formatNum(it.subtotal) + '</td></tr>';
+            }
+            html += '<tfoot><tr class="font-weight-bold"><td colspan="4" class="text-right">Total</td><td class="text-right">' + formatNum(d.total_amount) + '</td></tr></tfoot>';
+            html += '</tbody></table></div>';
+
+            // Serials
+            if (d.serials && d.serials.length > 0) {
+                html += '<h6 class="font-weight-bold" style="color:#0f172a;">Serials / IMEIs</h6>';
+                html += '<div class="table-responsive"><table class="table table-bordered table-sm"><thead class="thead-light"><tr><th>#</th><th>Serial / IMEI</th><th>Status</th></tr></thead><tbody>';
+                for (var j = 0; j < d.serials.length; j++) {
+                    var sn = d.serials[j];
+                    var snVal = sn.serial_number || sn.imei_number || '-';
+                    var snBadge = sn.status === 'available' ? 'success' : (sn.status === 'sold' ? 'secondary' : 'warning');
+                    html += '<tr><td>' + (j + 1) + '</td><td>' + escapeHtml(snVal) + '</td><td><span class="badge badge-' + snBadge + '">' + sn.status + '</span></td></tr>';
+                }
+                html += '</tbody></table></div>';
+            }
+
+            html += '<p class="text-muted small mb-0">Created: ' + d.created_at + '</p>';
+            document.getElementById('purchaseModalBody').innerHTML = html;
+        })
+        .catch(function() {
+            document.getElementById('purchaseModalBody').innerHTML = '<div class="alert alert-danger">Failed to load purchase details.</div>';
+        });
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(str));
+    return div.innerHTML;
+}
+
+function formatNum(n) {
+    return parseFloat(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 </script>
 
 <?php require_once '../../includes/footer.php'; ?>

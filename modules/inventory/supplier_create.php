@@ -5,10 +5,14 @@ $base_url = '../../';
 require_once '../../includes/functions.php';
 
 if ($_SERVER['REQUEST_METHOD']==='POST') {
+    $opening_balance = (float)($_POST['opening_balance']??0);
+    $adjustment = (float)($_POST['adjustment']??0);
     insert('suppliers', [
         'name'=>$_POST['name'],'contact_person'=>$_POST['contact_person']??'','phone'=>$_POST['phone']??'',
         'email'=>$_POST['email']??'','address'=>$_POST['address']??'','city'=>$_POST['city']??'',
-        'status'=>isset($_POST['status'])?1:0,'created_at'=>date('Y-m-d')
+        'opening_balance'=>$opening_balance,
+        'adjustment'=>$adjustment,
+        'status'=>isset($_POST['status'])?1:0,'created_at'=>date('Y-m-d'),'updated_at'=>date('Y-m-d')
     ]);
     redirect('suppliers.php', 'Supplier created');
 }
@@ -31,6 +35,13 @@ require_once '../../includes/header.php';
             <div class="col-md-4 form-group"><label class="form-label">City</label><input type="text" name="city" class="form-control"></div>
           </div>
           <div class="form-group"><label class="form-label">Address</label><textarea name="address" class="form-control" rows="2"></textarea></div>
+          <hr>
+          <h6 class="font-weight-bold text-primary"><i class="fas fa-coins"></i> Financial Details</h6>
+          <p class="small text-muted">Supplier amounts are credit by default (we owe the supplier).</p>
+          <div class="row">
+            <div class="col-md-6 form-group"><label class="form-label">Opening Balance (Credit)</label><input type="number" name="opening_balance" class="form-control" step="0.01" value="0"></div>
+            <div class="col-md-6 form-group"><label class="form-label">Adjustment <i class="fas fa-info-circle text-muted" title="Positive = we owe more, Negative = supplier owes us"></i></label><input type="number" name="adjustment" class="form-control" step="0.01" value="0" placeholder="+/- adjustment"></div>
+          </div>
           <div class="form-group"><div class="custom-control custom-switch"><input type="checkbox" class="custom-control-input" id="s" name="status" checked><label class="custom-control-label" for="s">Active</label></div></div>
           <button type="submit" class="btn btn-primary btn-block py-2"><i class="fas fa-save"></i> Create</button>
           <a href="suppliers.php" class="btn btn-secondary btn-block">Cancel</a>

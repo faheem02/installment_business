@@ -42,6 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'has_serial' => isset($_POST['has_serial']) ? 1 : 0,
         'status' => 1,
         'created_at' => date('Y-m-d'),
+        'updated_at' => date('Y-m-d'),
     ];
     insert('products', $data);
     redirect('products.php', 'Product created successfully');

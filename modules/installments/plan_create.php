@@ -11,6 +11,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'interest_rate' => (float)($_POST['interest_rate'] ?? 0),
         'status' => isset($_POST['status']) ? 1 : 0,
         'created_at' => date('Y-m-d'),
+        'updated_at' => date('Y-m-d'),
     ]);
     redirect('plans.php', 'Installment plan created');
 }

@@ -4,125 +4,71 @@ $page_title = 'New Sale';
 $base_url = '../../';
 require_once '../../includes/functions.php';
 
-$products = getAll('products', 'name ASC');
 $customers = getAll('customers', 'full_name ASC');
-$discounts = $pdo->query("SELECT * FROM discounts WHERE status = 1 AND (start_date IS NULL OR start_date <= CURDATE()) AND (end_date IS NULL OR end_date >= CURDATE())")->fetchAll();
-$plans = getAll('installment_plans', 'duration_months ASC');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $customer_id = (int)$_POST['customer_id'];
     $sale_date = $_POST['sale_date'] ?? date('Y-m-d');
     $payment_method = $_POST['payment_method'] ?? 'cash';
-    $discount_id = !empty($_POST['discount_id']) ? (int)$_POST['discount_id'] : null;
-    $installment_plan_id = !empty($_POST['installment_plan_id']) ? (int)$_POST['installment_plan_id'] : null;
-    $down_payment = (float)($_POST['down_payment'] ?? 0);
-    $notes = $_POST['notes'] ?? '';
-    $product_ids = $_POST['product_id'] ?? [];
+    $descriptions = $_POST['item_description'] ?? [];
     $quantities = $_POST['quantity'] ?? [];
     $prices = $_POST['price'] ?? [];
 
-    if (empty($customer_id) || empty($product_ids)) {
-        $_SESSION['error'] = 'Please select a customer and at least one product.';
-        header("Location: index.php");
-        exit;
+    if (empty($customer_id) || empty($descriptions)) {
+        $_SESSION['error'] = 'Please select a customer and add at least one item.';
+        header("Location: index.php"); exit;
     }
 
-    $subtotal = 0;
+    $total_amount = 0;
     $items = [];
-    foreach ($product_ids as $i => $pid) {
-        $pid = (int)$pid;
-        if ($pid <= 0) continue;
+    foreach ($descriptions as $i => $desc) {
+        $desc = trim($desc);
+        if ($desc === '') continue;
         $qty = max(1, (int)($quantities[$i] ?? 1));
         $price = (float)($prices[$i] ?? 0);
         $line_total = $qty * $price;
-        $subtotal += $line_total;
-        $items[] = ['product_id' => $pid, 'quantity' => $qty, 'price' => $price, 'subtotal' => $line_total];
+        $total_amount += $line_total;
+        $items[] = ['description' => $desc, 'quantity' => $qty, 'price' => $price, 'subtotal' => $line_total];
     }
 
     if (empty($items)) {
-        $_SESSION['error'] = 'Please select at least one valid product.';
-        header("Location: index.php");
-        exit;
+        $_SESSION['error'] = 'Please add at least one valid item.';
+        header("Location: index.php"); exit;
     }
 
-    $discount_amount = 0;
-    if ($discount_id) {
-        $disc = getById('discounts', $discount_id);
-        if ($disc) {
-            $discount_amount = $disc['discount_type'] === 'percentage'
-                ? $subtotal * ($disc['discount_value'] / 100)
-                : min($disc['discount_value'], $subtotal);
-        }
-    }
-
-    $total_amount = $subtotal - $discount_amount;
     $invoice_no = generateInvoiceNo();
 
     $sale_id = insert('sales', [
         'invoice_no' => $invoice_no,
         'customer_id' => $customer_id,
         'sale_date' => $sale_date,
-        'subtotal' => $subtotal,
-        'discount_id' => $discount_id,
-        'discount_amount' => $discount_amount,
+        'subtotal' => $total_amount,
+        'discount_amount' => 0,
         'total_amount' => $total_amount,
-        'down_payment' => $down_payment,
-        'financed_amount' => $total_amount - $down_payment,
-        'installment_plan_id' => $installment_plan_id,
+        'down_payment' => 0,
+        'financed_amount' => 0,
+        'monthly_installment' => 0,
+        'total_installments' => 0,
+        'installment_plan_id' => null,
         'payment_method' => $payment_method,
-        'payment_status' => $down_payment >= $total_amount ? 'paid' : ($installment_plan_id ? 'installment' : 'partial'),
+        'payment_status' => 'paid',
         'status' => 'active',
-        'notes' => $notes,
+        'notes' => null,
         'branch_id' => $_SESSION['branch_id'] ?? null,
         'created_by' => $_SESSION['user_id'] ?? null,
         'created_at' => date('Y-m-d'),
+        'updated_at' => date('Y-m-d'),
     ]);
 
     foreach ($items as $item) {
         insert('sale_items', [
             'sale_id' => $sale_id,
-            'product_id' => $item['product_id'],
+            'product_id' => null,
+            'item_description' => $item['description'],
             'quantity' => $item['quantity'],
             'price' => $item['price'],
             'subtotal' => $item['subtotal'],
         ]);
-    }
-
-    if ($installment_plan_id && ($total_amount - $down_payment) > 0) {
-        $plan = getById('installment_plans', $installment_plan_id);
-        if ($plan) {
-            $financed = $total_amount - $down_payment;
-            $months = (int)$plan['duration_months'];
-            $rate = (float)$plan['interest_rate'];
-
-            if ($rate > 0) {
-                $monthly_rate = $rate / 100 / 12;
-                $emi = $financed * $monthly_rate * pow(1 + $monthly_rate, $months) / (pow(1 + $monthly_rate, $months) - 1);
-            } else {
-                $emi = $financed / $months;
-            }
-
-            $emi = round($emi, 2);
-            $sale_date_obj = new DateTime($sale_date);
-
-            for ($i = 1; $i <= $months; $i++) {
-                $due = clone $sale_date_obj;
-                $due->modify("+{$i} month");
-                $remaining = $financed - ($emi * ($i - 1));
-                $inst_amount = ($i === $months) ? round($remaining, 2) : $emi;
-
-                insert('sale_installments', [
-                    'sale_id' => $sale_id,
-                    'installment_no' => $i,
-                    'due_date' => $due->format('Y-m-d'),
-                    'amount' => $inst_amount,
-                    'paid_amount' => 0,
-                    'balance' => $inst_amount,
-                    'status' => 'pending',
-                    'created_at' => date('Y-m-d'),
-                ]);
-            }
-        }
     }
 
     $_SESSION['success'] = "Sale created successfully. Invoice #$invoice_no";
@@ -134,208 +80,206 @@ require_once '../../includes/header.php';
 ?>
 
 <style>
-  .item-row { background: #f8f9fc; border-radius: 8px; padding: 12px; margin-bottom: 8px; border: 1px solid #e3e6f0; }
-  .item-row .remove-item { color: #e74a3b; cursor: pointer; }
-  #totals-section { background: #f8f9fc; border-radius: 8px; padding: 16px; }
-  #totals-section .total-row { display: flex; justify-content: space-between; padding: 4px 0; }
-  #totals-section .grand-total { font-size: 1.25rem; font-weight: 700; color: #0f172a; border-top: 2px solid #0f172a; padding-top: 8px; margin-top: 4px; }
+#wrapper { padding-left: 0 !important; }
+.sidebar { display: none !important; }
+#content-wrapper { margin-left: 0 !important; width: 100% !important; }
+.cart-table th { font-size: .72rem; text-transform: uppercase; white-space: nowrap; letter-spacing: .3px; background:#f8f9fc; color:#4e73df; }
+.cart-table td { vertical-align: middle; font-size: .85rem; }
+.cart-table .item-row:hover { background:#f8f9fc; }
+.finance-card { background:linear-gradient(135deg,#f8f9fc,#eef0f7); border-radius:8px; padding:12px; margin-bottom:0; }
 </style>
 
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h5 class="m-0 font-weight-bold" style="color:#0f172a;"><i class="fas fa-shopping-cart"></i> New Sale</h5>
+  <div>
+    <a href="invoices.php" class="btn btn-sm btn-outline-secondary"><i class="fas fa-arrow-left"></i> Back to Invoices</a>
+  </div>
+</div>
+
+<form method="post" id="saleForm">
 <div class="row">
-  <div class="col-lg-8">
-    <div class="card shadow mb-4">
-      <div class="card-header py-3">
-        <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-shopping-cart"></i> New Sale</h6>
-      </div>
-      <div class="card-body">
-        <form method="post" id="saleForm">
-          <div class="row">
-            <div class="col-md-6 form-group">
-              <label class="form-label">Customer <span class="text-danger">*</span></label>
-              <select name="customer_id" class="form-control" required>
-                <option value="">Select Customer</option>
-                <?php foreach ($customers as $c): ?>
-                  <option value="<?= $c['id'] ?>"><?= htmlspecialchars($c['full_name']) ?> (<?= htmlspecialchars($c['phone']) ?>)</option>
-                <?php endforeach; ?>
-              </select>
-            </div>
-            <div class="col-md-3 form-group">
-              <label class="form-label">Date</label>
-              <input type="date" name="sale_date" class="form-control" value="<?= date('Y-m-d') ?>">
-            </div>
-            <div class="col-md-3 form-group">
-              <label class="form-label">Payment Method</label>
-              <select name="payment_method" class="form-control">
-                <option value="cash">Cash</option>
-                <option value="card">Card</option>
-                <option value="bank_transfer">Bank Transfer</option>
-                <option value="mixed">Mixed</option>
-              </select>
-            </div>
-          </div>
-
-          <hr>
-          <div class="d-flex justify-content-between align-items-center mb-3">
-            <h6 class="font-weight-bold mb-0"><i class="fas fa-box"></i> Products</h6>
-            <button type="button" class="btn btn-success btn-sm" id="addItemBtn"><i class="fas fa-plus"></i> Add Item</button>
-          </div>
-
-          <div id="itemsContainer">
-            <div class="item-row">
-              <div class="row align-items-center">
-                <div class="col-md-5">
-                  <label class="form-label small">Product / Item Code</label>
-                  <select name="product_id[]" class="form-control product-select" required>
-                    <option value="">Select product</option>
-                    <?php foreach ($products as $p): ?>
-                      <option value="<?= $p['id'] ?>" data-price="<?= $p['sale_price'] ?>">
-                        <?= htmlspecialchars($p['code']) ?> - <?= htmlspecialchars($p['name']) ?> (<?= formatCurrency($p['sale_price']) ?>)
-                      </option>
-                    <?php endforeach; ?>
-                  </select>
-                </div>
-                <div class="col-md-2">
-                  <label class="form-label small">Qty</label>
-                  <input type="number" name="quantity[]" class="form-control qty-input" value="1" min="1" required>
-                </div>
-                <div class="col-md-3">
-                  <label class="form-label small font-weight-bold text-primary">Unit Price</label>
-                  <input type="number" name="price[]" class="form-control price-input font-weight-bold" step="0.01" min="0" required>
-                </div>
-                <div class="col-md-2">
-                  <label class="form-label small">Total</label>
-                  <div class="line-total pt-2 font-weight-bold" style="font-size:1.1rem;">0.00</div>
-                </div>
-                <div class="col-md-auto text-center pt-4 pl-0">
-                  <span class="remove-item d-none" style="cursor:pointer;color:#e74a3b;"><i class="fas fa-times-circle fa-lg"></i></span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <hr>
-
-          <div class="row">
-            <div class="col-md-4 form-group">
-              <label class="form-label">Discount</label>
-              <select name="discount_id" class="form-control" id="discountSelect">
-                <option value="">No Discount</option>
-                <?php foreach ($discounts as $d): ?>
-                  <option value="<?= $d['id'] ?>" data-type="<?= $d['discount_type'] ?>" data-value="<?= $d['discount_value'] ?>">
-                    <?= htmlspecialchars($d['name']) ?> (<?= $d['discount_type'] === 'percentage' ? $d['discount_value'] . '%' : formatCurrency($d['discount_value']) ?>)
-                  </option>
-                <?php endforeach; ?>
-              </select>
-            </div>
-            <div class="col-md-4 form-group">
-              <label class="form-label">Installment Plan</label>
-              <select name="installment_plan_id" class="form-control">
-                <option value="">Cash Sale</option>
-                <?php foreach ($plans as $p): ?>
-                  <option value="<?= $p['id'] ?>"><?= htmlspecialchars($p['name']) ?> (<?= $p['interest_rate'] ?>% interest)</option>
-                <?php endforeach; ?>
-              </select>
-            </div>
-            <div class="col-md-4 form-group">
-              <label class="form-label">Down Payment</label>
-              <input type="number" name="down_payment" id="downPayment" class="form-control" step="0.01" min="0" value="0">
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Notes</label>
-            <textarea name="notes" class="form-control" rows="2"></textarea>
-          </div>
-
-          <button type="submit" class="btn btn-primary btn-block py-2"><i class="fas fa-save"></i> Create Sale & Generate Invoice</button>
-        </form>
+  <!-- LEFT: Entry -->
+  <div class="col-lg-5 mb-3">
+    <!-- Customer Info -->
+    <div class="card shadow mb-3">
+      <div class="card-body py-3">
+        <div class="form-group mb-2">
+          <label class="small text-muted">Customer</label>
+          <select name="customer_id" class="form-control" required>
+            <option value="">Select</option>
+            <?php foreach ($customers as $c): ?>
+              <option value="<?= $c['id'] ?>"><?= htmlspecialchars($c['full_name']) ?> (<?= htmlspecialchars($c['phone']) ?>)</option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div class="row">
+          <div class="col-6"><div class="form-group mb-0"><label class="small text-muted">Date</label><input type="date" name="sale_date" class="form-control" value="<?= date('Y-m-d') ?>"></div></div>
+          <div class="col-6"><div class="form-group mb-0"><label class="small text-muted">Method</label><select name="payment_method" class="form-control"><option value="cash">Cash</option><option value="card">Card</option><option value="bank_transfer">Bank Transfer</option></select></div></div>
+        </div>
       </div>
     </div>
+
+    <!-- Add Item -->
+    <div class="card shadow mb-3">
+      <div class="card-header py-2"><h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-plus-circle"></i> Add Item</h6></div>
+      <div class="card-body py-3">
+        <div class="form-group mb-2">
+          <label class="small text-muted">Description <span class="text-danger">*</span></label>
+          <input type="text" id="entryDesc" class="form-control form-control-lg" placeholder="e.g. Furniture, Electronics..." autofocus>
+        </div>
+        <div class="row">
+          <div class="col-6"><div class="form-group mb-2"><label class="small text-muted">Qty</label><input type="number" id="entryQty" class="form-control form-control-lg" value="1" min="1"></div></div>
+          <div class="col-6"><div class="form-group mb-2"><label class="small text-muted">Unit Price</label><input type="number" id="entryPrice" class="form-control form-control-lg" step="0.01" min="0" placeholder="Enter price"></div></div>
+        </div>
+        <div id="entryPreview" class="finance-card mt-2" style="display:none;">
+          <div class="d-flex justify-content-between"><span class="summary-label">Line Amount</span><span class="summary-value" id="entryAmountPreview">0.00</span></div>
+        </div>
+      </div>
+    </div>
+
+    <button type="button" id="addToCartBtn" class="btn btn-primary btn-block btn-sm"><i class="fas fa-cart-plus"></i> Add to Cart</button>
   </div>
 
-  <div class="col-lg-4">
-    <div class="card shadow mb-4">
-      <div class="card-header py-3">
-        <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-calculator"></i> Totals</h6>
-      </div>
-      <div class="card-body" id="totals-section">
-        <div class="total-row"><span>Subtotal:</span><span id="subtotalDisplay">0.00</span></div>
-        <div class="total-row" id="discountDisplayRow" style="display:none;"><span>Discount:</span><span id="discountDisplay" class="text-danger">-0.00</span></div>
-        <div class="total-row grand-total"><span>Total:</span><span id="totalDisplay">0.00</span></div>
-        <hr>
-        <div class="total-row"><span>Down Payment:</span><span id="downPaymentDisplay">0.00</span></div>
-        <div class="total-row font-weight-bold text-primary"><span>Financed Amount:</span><span id="financedDisplay">0.00</span></div>
+  <!-- RIGHT: Cart + Professional Installment Summary -->
+  <div class="col-lg-7 mb-3">
+    <div class="card shadow h-100">
+      <div class="card-header py-2"><h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-list"></i> Cart</h6></div>
+      <div class="card-body p-0">
+        <!-- Cart Table -->
+        <div class="table-responsive" style="max-height:280px; overflow-y:auto;">
+          <table class="table table-sm table-bordered cart-table mb-0" id="cartTable">
+            <thead class="sticky-top">
+              <tr>
+                <th>Description</th>
+                <th style="width:55px;" class="text-center">Qty</th>
+                <th style="width:95px;" class="text-right">Unit Price</th>
+                <th style="width:95px;" class="text-right">Amount</th>
+                <th style="width:30px;" class="text-center"></th>
+              </tr>
+            </thead>
+            <tbody id="cartBody">
+            </tbody>
+          </table>
+        </div>
+        <div class="text-center text-muted small py-4" id="emptyCart"><i class="fas fa-box-open fa-2x d-block mb-2"></i>Cart is empty — add items from the left panel</div>
+
+        <!-- Summary -->
+        <div class="px-3 pb-3" id="summaryArea" style="display:none;">
+          <hr class="my-2">
+          <div class="d-flex justify-content-between align-items-center">
+            <span class="font-weight-bold" style="font-size:1.1rem;">Total Amount</span>
+            <span class="font-weight-bold" style="font-size:1.3rem;color:#0f172a;" id="totalDisplay">0.00</span>
+          </div>
+          <div class="d-flex justify-content-between align-items-center small mt-1">
+            <span class="text-muted">Method</span>
+            <span id="methodDisplay">Cash</span>
+          </div>
+          <button type="submit" class="btn btn-primary btn-block btn-sm mt-3" id="generateBtn"><i class="fas fa-file-invoice"></i> Generate Invoice</button>
+        </div>
+
+        <!-- Empty state button -->
+        <div class="text-center pb-3" id="emptySummary">
+          <button type="submit" class="btn btn-primary btn-block btn-sm mx-3" disabled style="width:auto;"><i class="fas fa-file-invoice"></i> Generate</button>
+          <small class="text-muted d-block mt-1">Add items to the cart first</small>
+        </div>
       </div>
     </div>
   </div>
 </div>
+</form>
 
 <script>
 $(document).ready(function() {
-    function calcLine($row) {
+
+    function updateEntryPreview() {
+        var desc = $('#entryDesc').val().trim();
+        var qty = parseFloat($('#entryQty').val()) || 1;
+        var price = parseFloat($('#entryPrice').val()) || 0;
+        var amount = qty * price;
+
+        if (desc && price > 0) {
+            $('#entryPreview').show();
+            $('#entryAmountPreview').text(amount.toFixed(2));
+        } else {
+            $('#entryPreview').hide();
+        }
+    }
+
+    $('#addToCartBtn').on('click', addToCart);
+    $('#entryQty, #entryPrice').on('keypress', function(e) {
+        if (e.which === 13) addToCart();
+    });
+    $('#entryDesc, #entryQty, #entryPrice').on('input', updateEntryPreview);
+
+    function addToCart() {
+        var desc = $('#entryDesc').val().trim();
+        if (!desc) { showMsg('Enter a description first'); return; }
+        var qty = parseFloat($('#entryQty').val()) || 1;
+        var price = parseFloat($('#entryPrice').val()) || 0;
+        if (price <= 0) { showMsg('Enter a valid price'); return; }
+        var amount = qty * price;
+
+        var html = '<tr class="item-row">' +
+            '<td><input type="hidden" name="item_description[]" value="' + $('<span>').text(desc).html() + '">' + $('<span>').text(desc).html() + '</td>' +
+            '<td class="text-center"><input type="number" name="quantity[]" class="form-control form-control-sm qty-input text-center" value="' + qty + '" min="1" style="width:50px;"></td>' +
+            '<td class="text-right"><input type="number" name="price[]" class="form-control form-control-sm price-input text-right" step="0.01" min="0" value="' + price.toFixed(2) + '" style="width:85px;"></td>' +
+            '<td class="text-right font-weight-bold line-total align-middle">' + amount.toFixed(2) + '</td>' +
+            '<td class="text-center align-middle p-0"><span class="remove-item" style="cursor:pointer;color:#e74a3b;"><i class="fas fa-times"></i></span></td>' +
+            '</tr>';
+        $('#cartBody').append(html);
+        $('#emptyCart').hide();
+        $('#summaryArea').show();
+        $('#emptySummary').hide();
+        clearEntry();
+        calcTotals();
+    }
+
+    function clearEntry() {
+        $('#entryDesc').val('').focus();
+        $('#entryPrice').val('');
+        $('#entryQty').val(1);
+        $('#entryPreview').hide();
+    }
+
+    $(document).on('input', '.qty-input, .price-input', function() {
+        calcRow($(this).closest('.item-row'));
+        calcTotals();
+    });
+
+    function calcRow($row) {
         var qty = parseFloat($row.find('.qty-input').val()) || 0;
         var price = parseFloat($row.find('.price-input').val()) || 0;
         $row.find('.line-total').text((qty * price).toFixed(2));
     }
 
     function calcTotals() {
-        var subtotal = 0;
-        $('#itemsContainer .item-row').each(function() {
-            subtotal += parseFloat($(this).find('.line-total').text()) || 0;
+        var total = 0, itemCount = 0;
+        $('#cartBody .item-row').each(function() {
+            itemCount++;
+            total += parseFloat($(this).find('.line-total').text()) || 0;
         });
-        var discountVal = 0;
-        var $discOpt = $('#discountSelect').find('option:selected');
-        if ($discOpt.val()) {
-            var dType = $discOpt.data('type');
-            var dValue = parseFloat($discOpt.data('value')) || 0;
-            discountVal = dType === 'percentage' ? subtotal * (dValue / 100) : Math.min(dValue, subtotal);
-            $('#discountDisplayRow').show();
-            $('#discountDisplay').text('-' + discountVal.toFixed(2));
-        } else {
-            $('#discountDisplayRow').hide();
-        }
-        var total = subtotal - discountVal;
-        var downPay = parseFloat($('#downPayment').val()) || 0;
-        var financed = Math.max(0, total - downPay);
-        $('#subtotalDisplay').text(subtotal.toFixed(2));
         $('#totalDisplay').text(total.toFixed(2));
-        $('#downPaymentDisplay').text(downPay.toFixed(2));
-        $('#financedDisplay').text(financed.toFixed(2));
+        $('#methodDisplay').text($('select[name="payment_method"]').find('option:selected').text());
+
+        if (itemCount === 0) {
+            $('#summaryArea').hide();
+            $('#emptySummary').show();
+        }
     }
 
-    $(document).on('change', '.product-select', function() {
-        var $row = $(this).closest('.item-row');
-        var price = $(this).find('option:selected').data('price') || 0;
-        $row.find('.price-input').val(price);
-        calcLine($row);
-        calcTotals();
-    });
-
-    $(document).on('input', '.qty-input, .price-input', function() {
-        calcLine($(this).closest('.item-row'));
-        calcTotals();
-    });
-
     $(document).on('click', '.remove-item', function() {
-        if ($('#itemsContainer .item-row').length > 1) {
-            $(this).closest('.item-row').remove();
-            calcTotals();
-        }
+        $(this).closest('.item-row').remove();
+        if ($('#cartBody .item-row').length === 0) $('#emptyCart').show();
+        calcTotals();
     });
 
-    $('#addItemBtn').on('click', function() {
-        var $first = $('#itemsContainer .item-row:first');
-        var $clone = $first.clone();
-        $clone.find('select').val('');
-        $clone.find('input').val('1');
-        $clone.find('.line-total').text('0.00');
-        $clone.find('.remove-item').removeClass('d-none');
-        $('#itemsContainer').append($clone);
-    });
+    $('select[name="payment_method"]').on('change', calcTotals);
 
-    $('#discountSelect').on('change', calcTotals);
-    $('#downPayment').on('input', calcTotals);
-    $('#itemsContainer .item-row:first .remove-item').addClass('d-none');
+    function showMsg(msg) {
+        var $a = $('<div class="alert alert-warning py-1 small mb-1">' + msg + '</div>');
+        $('#addToCartBtn').before($a);
+        setTimeout(function() { $a.fadeOut(function() { $(this).remove(); }); }, 1500);
+    }
 });
 </script>
 

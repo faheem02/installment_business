@@ -10,6 +10,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'description' => $_POST['description'] ?? '',
         'status' => isset($_POST['status']) ? 1 : 0,
         'created_at' => date('Y-m-d'),
+        'updated_at' => date('Y-m-d'),
     ]);
     redirect('categories.php', 'Category created');
 }

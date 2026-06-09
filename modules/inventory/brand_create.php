@@ -5,7 +5,7 @@ $base_url = '../../';
 require_once '../../includes/functions.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    insert('brands', ['name'=>$_POST['name'],'description'=>$_POST['description']??'','status'=>isset($_POST['status'])?1:0,'created_at'=>date('Y-m-d')]);
+    insert('brands', ['name'=>$_POST['name'],'description'=>$_POST['description']??'','status'=>isset($_POST['status'])?1:0,'created_at'=>date('Y-m-d'),'updated_at'=>date('Y-m-d')]);
     redirect('brands.php', 'Brand created');
 }
 

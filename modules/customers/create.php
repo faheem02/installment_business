@@ -23,7 +23,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'notes'           => $_POST['notes'] ?? '',
         'branch_id'       => 1,
         'created_by'      => 1,
-        'created_at'      => date('Y-m-d')
+        'created_at'      => date('Y-m-d'),
+        'updated_at'      => date('Y-m-d')
     ];
 
     $customer_id = insert('customers', $data);
@@ -41,7 +42,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'relation_to_customer' => $_POST["g_relation_$i"] ?? '',
                 'occupation'           => $_POST["g_occupation_$i"] ?? '',
                 'monthly_income'       => $_POST["g_income_$i"] ?? 0,
-                'created_at'           => date('Y-m-d')
+                'created_at'           => date('Y-m-d'),
+                'updated_at'           => date('Y-m-d')
             ]);
         }
     }

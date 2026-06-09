@@ -42,21 +42,25 @@
 
     <!-- Customer Management -->
     <div class="nav-item">
-      <a class="nav-link" data-toggle="collapse" href="#collapseCustomer" role="button" aria-expanded="false">
+      <?php $on_customer_page = str_contains($_SERVER['PHP_SELF'],'customers/') || str_contains($_SERVER['PHP_SELF'],'accounts/customer_ledger'); ?>
+      <a class="nav-link <?= $on_customer_page ? '' : 'collapsed' ?>" data-toggle="collapse" href="#collapseCustomer" role="button" aria-expanded="<?= $on_customer_page ? 'true' : 'false' ?>">
         <i class="fas fa-fw fa-users"></i>
         <span>Customer Management</span>
         <span class="arrow"><i class="fas fa-chevron-right"></i></span>
       </a>
-      <div class="collapse" id="collapseCustomer">
+      <div class="collapse <?= $on_customer_page ? 'show' : '' ?>" id="collapseCustomer">
         <div class="collapse-inner">
-          <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'customers/index.php') || str_contains($_SERVER['PHP_SELF'],'customers/create.php') || str_contains($_SERVER['PHP_SELF'],'customers/edit.php') || str_contains($_SERVER['PHP_SELF'],'customers/view.php') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/customers/index.php">
-            <i class="fas fa-user"></i> Customer Registration
+          <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'customers/create.php') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/customers/create.php">
+            <i class="fas fa-user-plus"></i> Customer Registration
+          </a>
+          <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'customers/index.php') || str_contains($_SERVER['PHP_SELF'],'customers/edit.php') || str_contains($_SERVER['PHP_SELF'],'customers/view.php') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/customers/index.php">
+            <i class="fas fa-address-card"></i> View Customers
+          </a>
+          <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'accounts/customer_ledger') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/accounts/customer_ledger.php">
+            <i class="fas fa-book"></i> Customer Ledger
           </a>
           <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'customers/cnic.php') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/customers/cnic.php">
             <i class="fas fa-id-card"></i> CNIC Records
-          </a>
-          <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'customers/history.php') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/customers/history.php">
-            <i class="fas fa-history"></i> Purchase History
           </a>
           <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'customers/contacts.php') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/customers/contacts.php">
             <i class="fas fa-address-book"></i> Contacts
@@ -80,8 +84,6 @@
           <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'sales/index.php') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/sales/index.php"><i class="fas fa-plus-circle"></i> New Sale</a>
           <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'sales/item_code.php') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/sales/item_code.php"><i class="fas fa-barcode"></i> Item Code</a>
           <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'sales/invoices') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/sales/invoices.php"><i class="fas fa-file-invoice"></i> Invoices</a>
-          <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'sales/payment_methods.php') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/sales/payment_methods.php"><i class="fas fa-credit-card"></i> Payments</a>
-          <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'sales/discount') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/sales/discounts.php"><i class="fas fa-percent"></i> Discounts</a>
         </div>
       </div>
     </div>
@@ -115,9 +117,26 @@
         <div class="collapse-inner">
           <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'inventory/products.php') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/inventory/products.php"><i class="fas fa-box"></i> Products</a>
           <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'inventory/purchases') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/inventory/purchases.php"><i class="fas fa-truck"></i> Purchases</a>
-          <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'inventory/suppliers') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/inventory/suppliers.php"><i class="fas fa-truck-loading"></i> Suppliers</a>
           <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'inventory/categor') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/inventory/categories.php"><i class="fas fa-tags"></i> Categories</a>
           <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'inventory/brand') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/inventory/brands.php"><i class="fas fa-copyright"></i> Brands</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Suppliers -->
+    <div class="nav-item">
+      <?php $on_supplier_page = str_contains($_SERVER['PHP_SELF'],'inventory/supplier') || str_contains($_SERVER['PHP_SELF'],'accounts/supplier_ledger'); ?>
+      <a class="nav-link <?= $on_supplier_page ? '' : 'collapsed' ?>" data-toggle="collapse" href="#collapseSupplier" role="button" aria-expanded="<?= $on_supplier_page ? 'true' : 'false' ?>">
+        <i class="fas fa-fw fa-truck-loading"></i>
+        <span>Suppliers</span>
+        <span class="arrow"><i class="fas fa-chevron-right"></i></span>
+      </a>
+      <div class="collapse <?= $on_supplier_page ? 'show' : '' ?>" id="collapseSupplier">
+        <div class="collapse-inner">
+          <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'inventory/supplier_create') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/inventory/supplier_create.php"><i class="fas fa-plus-circle"></i> Add Supplier</a>
+          <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'inventory/suppliers.php') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/inventory/suppliers.php"><i class="fas fa-list"></i> View Suppliers</a>
+          <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'accounts/supplier_ledger') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/accounts/supplier_ledger.php"><i class="fas fa-truck"></i> Supplier Ledger</a>
+          <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'inventory/supplier_payments') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/inventory/supplier_payments.php"><i class="fas fa-money-bill-wave"></i> Supplier Payments</a>
         </div>
       </div>
     </div>
@@ -131,8 +150,8 @@
       </a>
       <div class="collapse" id="collapsePayment">
         <div class="collapse-inner">
-          <a class="collapse-item" href="#"><i class="fas fa-receipt"></i> Receipts</a>
-          <a class="collapse-item" href="#"><i class="fas fa-coins"></i> Daily Collection</a>
+          <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'payments') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/payments/index.php"><i class="fas fa-receipt"></i> Receipts</a>
+          <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'daily') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/payments/daily.php"><i class="fas fa-coins"></i> Daily Collection</a>
         </div>
       </div>
     </div>
@@ -143,7 +162,7 @@
 
     <!-- Cash Book -->
     <div class="nav-item">
-      <a class="nav-link" href="#">
+      <a class="nav-link <?= str_contains($_SERVER['PHP_SELF'],'cashbook') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/cashbook/index.php">
         <i class="fas fa-fw fa-money-bill-wave"></i>
         <span>Cash Book</span>
       </a>
@@ -151,7 +170,7 @@
 
     <!-- Bank Book -->
     <div class="nav-item">
-      <a class="nav-link" href="#">
+      <a class="nav-link <?= str_contains($_SERVER['PHP_SELF'],'bankbook') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/bankbook/index.php">
         <i class="fas fa-fw fa-university"></i>
         <span>Bank Book</span>
       </a>
@@ -159,27 +178,32 @@
 
     <!-- Expenses -->
     <div class="nav-item">
-      <a class="nav-link" href="#">
+      <a class="nav-link <?= str_contains($_SERVER['PHP_SELF'],'expenses') ? '' : 'collapsed' ?>" data-toggle="collapse" href="#collapseExpense" role="button" aria-expanded="<?= str_contains($_SERVER['PHP_SELF'],'expenses') ? 'true' : 'false' ?>">
         <i class="fas fa-fw fa-file-invoice-dollar"></i>
         <span>Expenses</span>
+        <span class="arrow"><i class="fas fa-chevron-right"></i></span>
       </a>
+      <div class="collapse <?= str_contains($_SERVER['PHP_SELF'],'expenses') ? 'show' : '' ?>" id="collapseExpense">
+        <div class="collapse-inner">
+          <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'expenses/index') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/expenses/index.php"><i class="fas fa-file-invoice-dollar"></i> All Expenses</a>
+          <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'expenses/categories') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/expenses/categories.php"><i class="fas fa-tags"></i> Categories</a>
+        </div>
+      </div>
     </div>
 
     <!-- Accounts -->
     <div class="nav-item">
-      <a class="nav-link" data-toggle="collapse" href="#collapseAccounts" role="button" aria-expanded="false">
+      <a class="nav-link <?= str_contains($_SERVER['PHP_SELF'],'accounts') ? '' : 'collapsed' ?>" data-toggle="collapse" href="#collapseAccounts" role="button" aria-expanded="<?= str_contains($_SERVER['PHP_SELF'],'accounts') ? 'true' : 'false' ?>">
         <i class="fas fa-fw fa-book"></i>
         <span>Accounts & Finance</span>
         <span class="arrow"><i class="fas fa-chevron-right"></i></span>
       </a>
-      <div class="collapse" id="collapseAccounts">
+      <div class="collapse <?= str_contains($_SERVER['PHP_SELF'],'accounts') ? 'show' : '' ?>" id="collapseAccounts">
         <div class="collapse-inner">
-          <a class="collapse-item" href="#"><i class="fas fa-journal-whills"></i> General Ledger</a>
-          <a class="collapse-item" href="#"><i class="fas fa-user-tie"></i> Customer Ledger</a>
-          <a class="collapse-item" href="#"><i class="fas fa-truck"></i> Supplier Ledger</a>
-          <a class="collapse-item" href="#"><i class="fas fa-balance-scale"></i> Trial Balance</a>
-          <a class="collapse-item" href="#"><i class="fas fa-chart-line"></i> P&L Statement</a>
-          <a class="collapse-item" href="#"><i class="fas fa-file-alt"></i> Balance Sheet</a>
+          <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'accounts/general_ledger') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/accounts/general_ledger.php"><i class="fas fa-journal-whills"></i> General Ledger</a>
+          <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'accounts/trial_balance') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/accounts/trial_balance.php"><i class="fas fa-balance-scale"></i> Trial Balance</a>
+          <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'accounts/profit_loss') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/accounts/profit_loss.php"><i class="fas fa-chart-line"></i> P&L Statement</a>
+          <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'accounts/balance_sheet') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/accounts/balance_sheet.php"><i class="fas fa-file-alt"></i> Balance Sheet</a>
         </div>
       </div>
     </div>
@@ -190,14 +214,14 @@
 
     <!-- Reports -->
     <div class="nav-item">
-      <a class="nav-link" data-toggle="collapse" href="#collapseReports" role="button" aria-expanded="false">
+      <a class="nav-link <?= str_contains($_SERVER['PHP_SELF'],'reports') ? '' : 'collapsed' ?>" data-toggle="collapse" href="#collapseReports" role="button" aria-expanded="<?= str_contains($_SERVER['PHP_SELF'],'reports') ? 'true' : 'false' ?>">
         <i class="fas fa-fw fa-chart-bar"></i>
         <span>Reports</span>
         <span class="arrow"><i class="fas fa-chevron-right"></i></span>
       </a>
-      <div class="collapse" id="collapseReports">
+      <div class="collapse <?= str_contains($_SERVER['PHP_SELF'],'reports') ? 'show' : '' ?>" id="collapseReports">
         <div class="collapse-inner">
-          <a class="collapse-item" href="#"><i class="fas fa-cart-plus"></i> Sales Report</a>
+          <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'reports/sales_report') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/reports/sales_report.php"><i class="fas fa-cart-plus"></i> Sales Report</a>
           <a class="collapse-item" href="#"><i class="fas fa-undo"></i> Collection Report</a>
           <a class="collapse-item" href="#"><i class="fas fa-boxes"></i> Inventory Report</a>
           <a class="collapse-item" href="#"><i class="fas fa-coins"></i> Cash Book Report</a>

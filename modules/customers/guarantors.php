@@ -28,7 +28,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $customer_id) {
             'relation_to_customer' => $_POST['relation_to_customer'] ?? '',
             'occupation'           => $_POST['occupation'] ?? '',
             'monthly_income'       => $_POST['monthly_income'] ?? 0,
-            'created_at'           => date('Y-m-d')
+            'created_at'           => date('Y-m-d'),
+            'updated_at'           => date('Y-m-d')
         ]);
         redirect("guarantors.php?customer_id=$customer_id", 'Guarantor added successfully');
     }

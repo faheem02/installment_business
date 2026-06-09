@@ -25,6 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'branch_id' => 1,
         'created_by' => 1,
         'created_at' => date('Y-m-d'),
+        'updated_at' => date('Y-m-d'),
     ]);
 
     // Record the payment

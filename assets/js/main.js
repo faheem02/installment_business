@@ -64,3 +64,10 @@ $(document).ready(function () {
     $('.alert-dismissible').fadeOut('slow');
   }, 5000);
 });
+
+
+
+
+
+
+

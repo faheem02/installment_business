@@ -7,7 +7,10 @@ require_once '../../includes/functions.php';
 $search = $_GET['search'] ?? '';
 $status = $_GET['status'] ?? '';
 
-$sql = "SELECT s.*, c.full_name AS customer_name, c.phone AS customer_phone FROM sales s JOIN customers c ON s.customer_id = c.id WHERE 1=1";
+$sql = "SELECT s.*, c.full_name AS customer_name, c.phone AS customer_phone,
+       COALESCE((SELECT SUM(si2.paid_amount) FROM sale_installments si2 WHERE si2.sale_id = s.id), 0) AS total_inst_paid
+       FROM sales s
+       JOIN customers c ON s.customer_id = c.id WHERE 1=1";
 $params = [];
 if ($search) {
     $sql .= " AND (s.invoice_no LIKE ? OR c.full_name LIKE ? OR c.phone LIKE ?)";
@@ -62,7 +65,8 @@ require_once '../../includes/header.php';
             <th>Customer</th>
             <th>Date</th>
             <th>Total</th>
-            <th>Paid</th>
+            <th>Total Paid</th>
+            <th>Remaining</th>
             <th>Method</th>
             <th>Status</th>
             <th>Actions</th>
@@ -70,7 +74,7 @@ require_once '../../includes/header.php';
         </thead>
         <tbody>
           <?php if (empty($sales)): ?>
-            <tr><td colspan="8" class="text-center text-muted">No invoices found</td></tr>
+            <tr><td colspan="9" class="text-center text-muted">No invoices found</td></tr>
           <?php else: ?>
             <?php foreach ($sales as $s): ?>
               <tr>
@@ -78,7 +82,8 @@ require_once '../../includes/header.php';
                 <td><?= htmlspecialchars($s['customer_name']) ?><br><small class="text-muted"><?= htmlspecialchars($s['customer_phone']) ?></small></td>
                 <td><?= formatDate($s['sale_date']) ?></td>
                 <td class="text-right"><?= formatCurrency($s['total_amount']) ?></td>
-                <td class="text-right"><?= formatCurrency($s['down_payment']) ?></td>
+                <td class="text-right"><?php $total_paid = (float)$s['down_payment'] + (float)$s['total_inst_paid']; ?><?= formatCurrency($total_paid) ?></td>
+                <td class="text-right"><?php $remaining = (float)$s['total_amount'] - $total_paid; ?><span class="<?= $remaining > 0 ? 'text-danger font-weight-bold' : '' ?>"><?= formatCurrency($remaining) ?></span></td>
                 <td><?= ucfirst(str_replace('_', ' ', $s['payment_method'])) ?></td>
                 <td>
                   <?php

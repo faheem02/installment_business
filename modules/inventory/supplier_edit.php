@@ -10,6 +10,8 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
     update('suppliers', [
         'name'=>$_POST['name'],'contact_person'=>$_POST['contact_person']??'','phone'=>$_POST['phone']??'',
         'email'=>$_POST['email']??'','address'=>$_POST['address']??'','city'=>$_POST['city']??'',
+        'opening_balance'=>(float)($_POST['opening_balance']??0),
+        'adjustment'=>(float)($_POST['adjustment']??0),
         'status'=>isset($_POST['status'])?1:0,'updated_at'=>date('Y-m-d')
     ], $id);
     redirect('suppliers.php', 'Supplier updated');
@@ -33,6 +35,13 @@ require_once '../../includes/header.php';
             <div class="col-md-4 form-group"><label>City</label><input type="text" name="city" class="form-control" value="<?=htmlspecialchars($item['city'])?>"></div>
           </div>
           <div class="form-group"><label>Address</label><textarea name="address" class="form-control" rows="2"><?=htmlspecialchars($item['address'])?></textarea></div>
+          <hr>
+          <h6 class="font-weight-bold text-primary"><i class="fas fa-coins"></i> Financial Details</h6>
+          <p class="small text-muted">Supplier amounts are credit by default (we owe the supplier).</p>
+          <div class="row">
+            <div class="col-md-6 form-group"><label>Opening Balance (Credit)</label><input type="number" name="opening_balance" class="form-control" step="0.01" value="<?=$item['opening_balance']?>"></div>
+            <div class="col-md-6 form-group"><label>Adjustment <i class="fas fa-info-circle text-muted" title="Positive = we owe more, Negative = supplier owes us"></i></label><input type="number" name="adjustment" class="form-control" step="0.01" value="<?=$item['adjustment']?>" placeholder="+/- adjustment"></div>
+          </div>
           <div class="form-group"><div class="custom-control custom-switch"><input type="checkbox" class="custom-control-input" id="s" name="status" <?=$item['status']?'checked':''?>><label class="custom-control-label" for="s">Active</label></div></div>
           <button type="submit" class="btn btn-primary btn-block py-2"><i class="fas fa-save"></i> Update</button>
           <a href="suppliers.php" class="btn btn-secondary btn-block">Cancel</a>

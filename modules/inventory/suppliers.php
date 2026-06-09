@@ -11,7 +11,18 @@ if (isset($_GET['toggle'])) {
 }
 if (isset($_GET['delete'])) { delete('suppliers', (int)$_GET['delete']); redirect('suppliers.php', 'Supplier deleted'); }
 
-$items = getAll('suppliers', 'name ASC');
+$items = $pdo->query("
+    SELECT s.*,
+           IFNULL(purch.total_purchase, 0) AS total_purchase,
+           IFNULL(ret.total_return, 0) AS total_return,
+           IFNULL(sp.total_paid, 0) AS total_paid
+    FROM suppliers s
+    LEFT JOIN (SELECT supplier_id, SUM(total_amount) AS total_purchase FROM purchases WHERE status != 'cancelled' GROUP BY supplier_id) purch ON purch.supplier_id = s.id
+    LEFT JOIN (SELECT supplier_id, SUM(amount) AS total_return FROM purchase_returns GROUP BY supplier_id) ret ON ret.supplier_id = s.id
+    LEFT JOIN (SELECT supplier_id, SUM(amount) AS total_paid FROM supplier_payments GROUP BY supplier_id) sp ON sp.supplier_id = s.id
+    ORDER BY s.name ASC
+")->fetchAll();
+
 require_once '../../includes/header.php';
 ?>
 
@@ -23,20 +34,23 @@ require_once '../../includes/header.php';
   <div class="card-body">
     <div class="table-responsive">
       <table class="table table-bordered table-hover">
-        <thead class="thead-light"><tr><th>Name</th><th>Contact</th><th>Phone</th><th>City</th><th>Status</th><th>Actions</th></tr></thead>
+        <thead class="thead-light"><tr><th>#</th><th>ID</th><th>Name</th><th>Phone</th><th>Address</th><th class="text-right">Closing Balance</th><th>Actions</th></tr></thead>
         <tbody>
-          <?php if (empty($items)): ?><tr><td colspan="6" class="text-center text-muted">No suppliers found</td></tr>
-          <?php else: foreach ($items as $c): ?>
+          <?php if (empty($items)): ?><tr><td colspan="7" class="text-center text-muted">No suppliers found</td></tr>
+          <?php else: foreach ($items as $i => $c):
+            $closing = (float)$c['opening_balance'] + (float)$c['adjustment'] + (float)$c['total_purchase'] - (float)$c['total_return'] - (float)$c['total_paid'];
+          ?>
             <tr>
-              <td><?=htmlspecialchars($c['name'])?></td>
-              <td><?=htmlspecialchars($c['contact_person']??'-')?></td>
-              <td><?=htmlspecialchars($c['phone']??'-')?></td>
-              <td><?=htmlspecialchars($c['city']??'-')?></td>
-              <td><span class="badge badge-<?=$c['status']?'success':'secondary'?>"><?=$c['status']?'Active':'Inactive'?></span></td>
+              <td><?= $i + 1 ?></td>
+              <td><span class="badge badge-secondary"><?= $c['id'] ?></span></td>
+              <td><strong><?= htmlspecialchars($c['name']) ?></strong></td>
+              <td><?= htmlspecialchars($c['phone'] ?? '-') ?></td>
+              <td><?= htmlspecialchars($c['city'] ?? ($c['address'] ?? '-')) ?></td>
+              <td class="text-right font-weight-bold" style="color:#0f172a;"><?= formatCurrency($closing) ?></td>
               <td>
-                <a href="supplier_edit.php?id=<?=$c['id']?>" class="btn btn-sm btn-warning"><i class="fas fa-edit"></i></a>
-                <a href="suppliers.php?toggle=<?=$c['id']?>" class="btn btn-sm btn-<?=$c['status']?'secondary':'success'?>"><i class="fas fa-<?=$c['status']?'times':'check'?>"></i></a>
-                <a href="suppliers.php?delete=<?=$c['id']?>" class="btn btn-sm btn-danger" onclick="return confirm('Delete?')"><i class="fas fa-trash"></i></a>
+                <a href="supplier_view.php?id=<?=$c['id']?>" class="btn btn-sm btn-info" title="Details"><i class="fas fa-eye"></i></a>
+                <a href="supplier_edit.php?id=<?=$c['id']?>" class="btn btn-sm btn-warning" title="Edit"><i class="fas fa-edit"></i></a>
+                <a href="suppliers.php?delete=<?=$c['id']?>" class="btn btn-sm btn-danger" title="Delete" onclick="return confirm('Delete?')"><i class="fas fa-trash"></i></a>
               </td>
             </tr>
           <?php endforeach; endif; ?>

@@ -152,6 +152,8 @@ CREATE TABLE suppliers (
     email           VARCHAR(100),
     address         TEXT,
     city            VARCHAR(50),
+    opening_balance DECIMAL(12,2) DEFAULT 0.00,
+    adjustment      DECIMAL(12,2) DEFAULT 0.00 COMMENT 'Positive = we owe, Negative = supplier owes us',
     status          TINYINT(1) DEFAULT 1,
     created_at      DATE NOT NULL,
     updated_at      DATE DEFAULT NULL
