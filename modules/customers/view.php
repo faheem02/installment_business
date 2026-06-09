@@ -112,8 +112,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_payment'])) {
 
             if ($method === 'cash') {
                 recordCashInflow($pdo, $pay_date, $amount, 'Installment - Customer #' . $id, 'payment', $payment_id, (int)($_POST['created_by'] ?? $_SESSION['user_id'] ?? 1));
-            } elseif ($method === 'card') {
-                recordBankInflow($pdo, $pay_date, $amount, 'Installment (card) - Customer #' . $id, 'payment', $payment_id, (int)($_POST['created_by'] ?? $_SESSION['user_id'] ?? 1));
+            } elseif ($method === 'bank') {
+                recordBankInflow($pdo, $pay_date, $amount, 'Installment (bank) - Customer #' . $id, 'payment', $payment_id, (int)($_POST['created_by'] ?? $_SESSION['user_id'] ?? 1));
             }
 
             $_SESSION['success'] = 'Payment recorded for installment #' . $inst['installment_no'];
@@ -397,7 +397,7 @@ require_once '../../includes/header.php';
               <thead class="thead-light">
                 <tr>
                   <th>Invoice</th>
-                  <th>Date</th>
+                  <th class="text-nowrap">Date</th>
                   <th class="text-right">Amount</th>
                   <th class="text-right">Financed</th>
                   <th class="text-center">Months</th>
@@ -419,7 +419,7 @@ require_once '../../includes/header.php';
                 ?>
                   <tr>
                     <td><span class="badge badge-secondary"><?= htmlspecialchars($s['invoice_no']) ?></span></td>
-                    <td><?= formatDate($s['sale_date']) ?></td>
+                    <td class="text-nowrap"><?= formatDate($s['sale_date']) ?></td>
                     <td class="text-right font-weight-bold"><?= formatCurrency($s['total_amount']) ?></td>
                     <td class="text-right"><?= formatCurrency($s['financed_amount']) ?></td>
                     <td class="text-center"><?= $s['total_installments'] ?></td>
@@ -777,8 +777,7 @@ require_once '../../includes/header.php';
                     <label class="small text-muted">Method</label>
                     <select name="payment_method" class="form-control" required>
                       <option value="cash">Cash</option>
-                      <option value="card">Card</option>
-                      <option value="bank_transfer">Bank Transfer</option>
+                      <option value="bank">Bank</option>
                     </select>
                   </div>
                 </div>

@@ -78,8 +78,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($payment_method === 'cash') {
             recordCashInflow($pdo, $payment_date, $pay_amount, 'Installment - Sale #' . $inst['sale_id'], 'payment', $payment_id, $_SESSION['user_id'] ?? null);
-        } elseif ($payment_method === 'card') {
-            recordBankInflow($pdo, $payment_date, $pay_amount, 'Installment (card) - Sale #' . $inst['sale_id'], 'payment', $payment_id, $_SESSION['user_id'] ?? null);
+        } elseif ($payment_method === 'bank') {
+            recordBankInflow($pdo, $payment_date, $pay_amount, 'Installment (bank) - Sale #' . $inst['sale_id'], 'payment', $payment_id, $_SESSION['user_id'] ?? null);
         }
 
         $msg = "Payment of " . formatCurrency($pay_amount) . " recorded for installment #{$inst['installment_no']}.";
@@ -148,8 +148,7 @@ require_once '../../includes/header.php';
               <label class="form-label">Method</label>
               <select name="payment_method" class="form-control">
                 <option value="cash">Cash</option>
-                <option value="card">Card</option>
-                <option value="bank_transfer">Bank Transfer</option>
+                <option value="bank">Bank</option>
               </select>
             </div>
           </div>

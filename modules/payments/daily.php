@@ -26,12 +26,11 @@ $card_total = 0;
 $bank_total = 0;
 foreach ($payments as $p) {
     $total_collected += $p['amount'];
-    match ($p['payment_method']) {
-        'cash' => $cash_total += $p['amount'],
-        'card' => $card_total += $p['amount'],
-        'bank_transfer' => $bank_total += $p['amount'],
-        default => null
-    };
+    if ($p['payment_method'] === 'cash') {
+        $cash_total += $p['amount'];
+    } else {
+        $card_total += $p['amount'];
+    }
 }
 
 require_once '../../includes/header.php';
@@ -125,14 +124,10 @@ require_once '../../includes/header.php';
                 <td class="text-right font-weight-bold text-success"><?= formatCurrency($p['amount']) ?></td>
                 <td>
                   <?php
-                  $mb = match($p['payment_method']) {
-                    'cash' => 'success',
-                    'card' => 'info',
-                    'bank_transfer' => 'primary',
-                    default => 'secondary'
-                  };
+                  $mb = $p['payment_method'] === 'cash' ? 'success' : 'info';
+                  $ml = $p['payment_method'] === 'cash' ? 'Cash' : 'Bank';
                   ?>
-                  <span class="badge badge-<?= $mb ?>"><?= ucfirst($p['payment_method']) ?></span>
+                  <span class="badge badge-<?= $mb ?>"><?= $ml ?></span>
                 </td>
                 <td><span class="badge badge-secondary"><?= ucfirst(str_replace('_', ' ', $p['payment_type'])) ?></span></td>
                 <td><?= htmlspecialchars($p['received_by_name'] ?? '-') ?></td>

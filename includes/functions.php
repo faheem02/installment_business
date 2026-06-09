@@ -141,7 +141,19 @@ function recordCashInflow($pdo, $date, $amount, $description, $reference_type = 
 function recordBankInflow($pdo, $date, $amount, $description, $reference_type = null, $reference_id = null, $created_by = null) {
     $stmt = $pdo->query("SELECT id, current_balance FROM bank_accounts WHERE status = 1 ORDER BY id ASC LIMIT 1");
     $account = $stmt->fetch();
-    if (!$account) return null;
+    if (!$account) {
+        $account_id = insert('bank_accounts', [
+            'account_name' => 'Default Account',
+            'bank_name' => 'Default Bank',
+            'account_no' => 'AUTO-' . date('YmdHis'),
+            'account_type' => 'current',
+            'opening_balance' => 0,
+            'current_balance' => 0,
+            'status' => 1,
+            'created_at' => $date,
+        ]);
+        $account = ['id' => $account_id, 'current_balance' => 0];
+    }
 
     insert('bank_transactions', [
         'bank_account_id' => $account['id'],

@@ -71,12 +71,11 @@ $card_total = 0;
 $bank_total = 0;
 foreach ($expenses as $e) {
     $total_amount += $e['amount'];
-    match ($e['payment_method']) {
-        'cash' => $cash_total += $e['amount'],
-        'card' => $card_total += $e['amount'],
-        'bank_transfer' => $bank_total += $e['amount'],
-        default => null
-    };
+    if ($e['payment_method'] === 'cash') {
+        $cash_total += $e['amount'];
+    } else {
+        $card_total += $e['amount'];
+    }
 }
 
 require_once '../../includes/header.php';
@@ -205,14 +204,10 @@ require_once '../../includes/header.php';
                 <td class="text-right font-weight-bold text-danger"><?= formatCurrency($e['amount']) ?></td>
                 <td>
                   <?php
-                  $mb = match($e['payment_method']) {
-                    'cash' => 'success',
-                    'card' => 'info',
-                    'bank_transfer' => 'primary',
-                    default => 'secondary'
-                  };
+                  $mb = $e['payment_method'] === 'cash' ? 'success' : 'info';
+                  $ml = $e['payment_method'] === 'cash' ? 'Cash' : 'Bank';
                   ?>
-                  <span class="badge badge-<?= $mb ?> status-badge"><?= ucfirst($e['payment_method']) ?></span>
+                  <span class="badge badge-<?= $mb ?> status-badge"><?= $ml ?></span>
                 </td>
                 <td>
                   <?php
@@ -288,8 +283,7 @@ require_once '../../includes/header.php';
             <label class="small">Payment Method</label>
             <select name="payment_method" class="form-control">
               <option value="cash">Cash</option>
-              <option value="card">Card</option>
-              <option value="bank_transfer">Bank Transfer</option>
+              <option value="bank">Bank</option>
             </select>
           </div>
           <div class="form-group">

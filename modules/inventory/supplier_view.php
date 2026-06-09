@@ -73,6 +73,18 @@ foreach ($purchases_data as $p) {
 $cash_paid = array_sum(array_column($payments_data, 'amount'));
 $closing = $opening + $adjustment + $credit_purchase - $cash_paid;
 
+// Fetch purchase items for product detail
+$purchase_items = $pdo->prepare("
+    SELECT pi.*, p.name AS product_name, p.code AS product_code, pu.purchase_date, pu.invoice_no AS purchase_invoice
+    FROM purchase_items pi
+    JOIN purchases pu ON pu.id = pi.purchase_id
+    LEFT JOIN products p ON p.id = pi.product_id
+    WHERE pu.supplier_id = ?
+    ORDER BY pu.purchase_date DESC
+");
+$purchase_items->execute([$id]);
+$purchase_items_data = $purchase_items->fetchAll();
+
 $tab = $_GET['tab'] ?? 'overview';
 
 // Handle CSV download
@@ -114,9 +126,58 @@ require_once '../../includes/header.php';
 </ul>
 
 <?php if ($tab === 'overview'): ?>
+<!-- Supplier Info Bar -->
+<div class="card shadow mb-4">
+  <div class="card-body py-3">
+    <div class="row">
+      <div class="col-md-3"><small class="text-muted d-block">Phone</small><strong><?= htmlspecialchars($supplier['phone'] ?? '-') ?></strong></div>
+      <div class="col-md-3"><small class="text-muted d-block">City</small><strong><?= htmlspecialchars($supplier['city'] ?? '-') ?></strong></div>
+      <div class="col-md-3"><small class="text-muted d-block">Email</small><strong><?= htmlspecialchars($supplier['email'] ?? '-') ?></strong></div>
+      <div class="col-md-3"><small class="text-muted d-block">Address</small><strong><?= htmlspecialchars($supplier['address'] ?? '-') ?></strong></div>
+    </div>
+  </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+  <div class="col-xl-3 col-md-6 mb-3">
+    <div class="card border-left-primary shadow h-100 py-2">
+      <div class="card-body"><div class="row no-gutters align-items-center">
+        <div class="col mr-2"><div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Opening Balance</div><div class="h5 mb-0 font-weight-bold" style="color:#0f172a;"><?= formatCurrency($opening) ?></div></div>
+        <div class="col-auto"><i class="fas fa-coins fa-2x text-gray-300"></i></div>
+      </div></div>
+    </div>
+  </div>
+  <div class="col-xl-3 col-md-6 mb-3">
+    <div class="card border-left-success shadow h-100 py-2">
+      <div class="card-body"><div class="row no-gutters align-items-center">
+        <div class="col mr-2"><div class="text-xs font-weight-bold text-success text-uppercase mb-1">Total Supplied</div><div class="h5 mb-0 font-weight-bold" style="color:#0f172a;"><?= formatCurrency($credit_purchase) ?></div></div>
+        <div class="col-auto"><i class="fas fa-shopping-cart fa-2x text-gray-300"></i></div>
+      </div></div>
+    </div>
+  </div>
+  <div class="col-xl-3 col-md-6 mb-3">
+    <div class="card border-left-warning shadow h-100 py-2">
+      <div class="card-body"><div class="row no-gutters align-items-center">
+        <div class="col mr-2"><div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Total Paid</div><div class="h5 mb-0 font-weight-bold" style="color:#0f172a;"><?= formatCurrency($cash_paid) ?></div></div>
+        <div class="col-auto"><i class="fas fa-money-bill-wave fa-2x text-gray-300"></i></div>
+      </div></div>
+    </div>
+  </div>
+  <div class="col-xl-3 col-md-6 mb-3">
+    <div class="card border-left-danger shadow h-100 py-2">
+      <div class="card-body"><div class="row no-gutters align-items-center">
+        <div class="col mr-2"><div class="text-xs font-weight-bold text-danger text-uppercase mb-1">Closing Balance</div><div class="h5 mb-0 font-weight-bold" style="color:#0f172a;"><?= formatCurrency($closing) ?></div></div>
+        <div class="col-auto"><i class="fas fa-balance-scale fa-2x text-gray-300"></i></div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
 <div class="row">
-  <div class="col-lg-7 mb-4">
-    <div class="card shadow">
+  <!-- Left: Financial Summary + Edit -->
+  <div class="col-lg-5 mb-4">
+    <div class="card shadow h-100">
       <div class="card-header py-3 d-flex justify-content-between align-items-center">
         <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-calculator"></i> Financial Summary</h6>
         <button class="btn btn-sm btn-outline-primary" onclick="$('#editFinancials').toggleClass('d-none')"><i class="fas fa-pen"></i> Edit</button>
@@ -130,7 +191,7 @@ require_once '../../includes/header.php';
                 <input type="number" name="opening_balance" class="form-control form-control-sm" step="0.01" value="<?= $supplier['opening_balance'] ?>">
               </div>
               <div class="form-group col-md-6 mb-2">
-                <label class="small text-muted">Adjustment <i class="fas fa-info-circle" title="Positive = we owe more, Negative = supplier owes us"></i></label>
+                <label class="small text-muted">Adjustment</label>
                 <input type="number" name="adjustment" class="form-control form-control-sm" step="0.01" value="<?= $supplier['adjustment'] ?>">
               </div>
             </div>
@@ -139,13 +200,11 @@ require_once '../../includes/header.php';
           </form>
         </div>
         <table class="table table-sm table-borderless mb-0" style="font-size:.95rem;">
-          <tbody>
-            <tr><td><i class="fas fa-coins text-primary fa-fw mr-2"></i> Opening Balance</td><td class="text-right font-weight-bold"><?= formatCurrency($opening) ?></td></tr>
-            <tr><td><i class="fas fa-adjust text-info fa-fw mr-2"></i> Adjustment <span class="text-muted small">(+/-)</span></td><td class="text-right font-weight-bold"><?= formatCurrency($adjustment) ?></td></tr>
-            <tr><td colspan="2"><hr class="my-1"></td></tr>
-            <tr><td><i class="fas fa-shopping-cart text-success fa-fw mr-2"></i> Products Supplied</td><td class="text-right font-weight-bold">+ <?= formatCurrency($credit_purchase) ?></td></tr>
-            <tr><td><i class="fas fa-hand-holding-usd text-warning fa-fw mr-2"></i> Cash Paid</td><td class="text-right font-weight-bold text-success">- <?= formatCurrency($cash_paid) ?></td></tr>
-          </tbody>
+          <tr><td><i class="fas fa-coins text-primary fa-fw mr-2"></i> Opening Balance</td><td class="text-right font-weight-bold"><?= formatCurrency($opening) ?></td></tr>
+          <tr><td><i class="fas fa-adjust text-info fa-fw mr-2"></i> Adjustment</td><td class="text-right font-weight-bold"><?= formatCurrency($adjustment) ?></td></tr>
+          <tr><td colspan="2"><hr class="my-1"></td></tr>
+          <tr><td><i class="fas fa-shopping-cart text-success fa-fw mr-2"></i> Products Supplied</td><td class="text-right font-weight-bold">+ <?= formatCurrency($credit_purchase) ?></td></tr>
+          <tr><td><i class="fas fa-hand-holding-usd text-warning fa-fw mr-2"></i> Total Paid</td><td class="text-right font-weight-bold text-success">- <?= formatCurrency($cash_paid) ?></td></tr>
         </table>
         <div class="text-center p-3 bg-primary text-white rounded mt-3">
           <div class="small text-uppercase opacity-75">Closing Balance</div>
@@ -154,36 +213,106 @@ require_once '../../includes/header.php';
       </div>
     </div>
   </div>
-  <div class="col-lg-5 mb-4">
+
+  <!-- Right: Quick Stats + Recent Activity -->
+  <div class="col-lg-7 mb-4">
     <div class="card shadow h-100">
       <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-info"><i class="fas fa-chart-bar"></i> Quick Stats</h6></div>
-      <div class="card-body py-2">
-        <table class="table table-sm table-borderless mb-0">
-          <tr><td class="text-muted">Total Purchases</td><td class="text-right font-weight-bold"><?= count($purchases_data) ?></td></tr>
-          <tr><td class="text-muted">Last Purchase</td><td class="text-right"><?= !empty($purchases_data) ? formatDate($purchases_data[0]['purchase_date']) : '-' ?></td></tr>
-          <tr><td class="text-muted">Total Payments</td><td class="text-right font-weight-bold"><?= count($payments_data) ?></td></tr>
-          <tr><td class="text-muted">Registered</td><td class="text-right"><?= formatDate($supplier['created_at']) ?></td></tr>
-          <tr><td class="text-muted">Status</td><td class="text-right"><span class="badge badge-<?= $supplier['status'] ? 'success' : 'secondary' ?>"><?= $supplier['status'] ? 'Active' : 'Inactive' ?></span></td></tr>
-        </table>
+      <div class="card-body">
+        <div class="row">
+          <div class="col-6">
+            <table class="table table-sm table-borderless mb-0">
+              <tr><td class="text-muted">Total Purchases</td><td class="text-right font-weight-bold"><?= count($purchases_data) ?></td></tr>
+              <tr><td class="text-muted">Items Supplied</td><td class="text-right font-weight-bold"><?= array_sum(array_column($purchase_items_data, 'quantity')) ?></td></tr>
+              <tr><td class="text-muted">Total Payments</td><td class="text-right font-weight-bold"><?= count($payments_data) ?></td></tr>
+            </table>
+          </div>
+          <div class="col-6">
+            <table class="table table-sm table-borderless mb-0">
+              <tr><td class="text-muted">Last Purchase</td><td class="text-right"><?= !empty($purchases_data) ? formatDate($purchases_data[0]['purchase_date']) : '-' ?></td></tr>
+              <tr><td class="text-muted">Last Payment</td><td class="text-right"><?= !empty($payments_data) ? formatDate($payments_data[0]['payment_date']) : '-' ?></td></tr>
+              <tr><td class="text-muted">Registered</td><td class="text-right"><?= formatDate($supplier['created_at']) ?></td></tr>
+            </table>
+          </div>
+        </div>
+        <hr>
+        <div class="text-right">
+          <a href="supplier_view.php?id=<?=$id?>&tab=payments" class="btn btn-sm btn-success"><i class="fas fa-money-bill-wave"></i> View Full Ledger</a>
+          <a href="supplier_view.php?id=<?=$id?>&tab=payments" class="btn btn-sm btn-primary"><i class="fas fa-exchange-alt"></i> Record Payment</a>
+        </div>
       </div>
     </div>
   </div>
 </div>
 
+<!-- Products Supplied -->
+<div class="card shadow mb-4">
+  <div class="card-header py-3 d-flex justify-content-between align-items-center">
+    <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-boxes"></i> Products Supplied</h6>
+    <span class="text-muted small"><?= count($purchase_items_data) ?> records</span>
+  </div>
+  <div class="card-body">
+    <?php if (empty($purchase_items_data)): ?>
+      <p class="text-muted mb-0 text-center">No products supplied yet</p>
+    <?php else: ?>
+      <div class="table-responsive">
+        <table class="table table-bordered table-hover table-sm">
+          <thead class="thead-light">
+            <tr><th>Date</th><th>Invoice</th><th>Product</th><th class="text-center">Qty</th><th class="text-right">Price</th><th class="text-right">Total</th></tr>
+          </thead>
+          <tbody>
+            <?php foreach ($purchase_items_data as $pi): ?>
+              <tr>
+                <td><?= formatDate($pi['purchase_date']) ?></td>
+                <td><span class="badge badge-secondary"><?= htmlspecialchars($pi['purchase_invoice'] ?? '#'.$pi['purchase_id']) ?></span></td>
+                <td><?= htmlspecialchars($pi['product_name'] ?? $pi['product_code'] ?? 'Item') ?></td>
+                <td class="text-center"><?= (int)$pi['quantity'] ?></td>
+                <td class="text-right"><?= formatCurrency($pi['purchase_price']) ?></td>
+                <td class="text-right font-weight-bold"><?= formatCurrency($pi['subtotal']) ?></td>
+              </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+    <?php endif; ?>
+  </div>
+</div>
+
+<!-- Payment History -->
+<div class="card shadow mb-4">
+  <div class="card-header py-3 d-flex justify-content-between align-items-center">
+    <h6 class="m-0 font-weight-bold text-success"><i class="fas fa-money-bill-wave"></i> Payment History</h6>
+    <span class="badge badge-success status-badge">Total: <?= formatCurrency($cash_paid) ?></span>
+  </div>
+  <div class="card-body">
+    <?php if (empty($payments_data)): ?>
+      <p class="text-muted mb-0 text-center">No payments recorded</p>
+    <?php else: ?>
+      <div class="table-responsive">
+        <table class="table table-bordered table-hover table-sm">
+          <thead class="thead-light">
+            <tr><th>Date</th><th>Ref</th><th class="text-right">Amount</th><th>Method</th><th>Description</th><th>By</th></tr>
+          </thead>
+          <tbody>
+            <?php foreach ($payments_data as $p): ?>
+              <tr>
+                <td><?= formatDate($p['payment_date']) ?></td>
+                <td><span class="badge badge-secondary">#<?= $p['id'] ?></span></td>
+                <td class="text-right font-weight-bold text-danger"><?= formatCurrency($p['amount']) ?></td>
+                <td><span class="badge badge-<?= $p['payment_method'] === 'cash' ? 'success' : 'info' ?> status-badge"><?= ucfirst($p['payment_method'] === 'cash' ? 'Cash' : 'Bank') ?></span></td>
+                <td class="small"><?= htmlspecialchars($p['description'] ?? '-') ?></td>
+                <td><?= htmlspecialchars($p['added_by'] ?? '-') ?></td>
+              </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+    <?php endif; ?>
+  </div>
+</div>
+
 <?php elseif ($tab === 'payments'): ?>
 <?php
-// Fetch purchase items for product detail
-$purchase_items = $pdo->prepare("
-    SELECT pi.*, p.name AS product_name, p.code AS product_code, pu.purchase_date, pu.invoice_no AS purchase_invoice
-    FROM purchase_items pi
-    JOIN purchases pu ON pu.id = pi.purchase_id
-    LEFT JOIN products p ON p.id = pi.product_id
-    WHERE pu.supplier_id = ?
-    ORDER BY pu.purchase_date DESC
-");
-$purchase_items->execute([$id]);
-$purchase_items_data = $purchase_items->fetchAll();
-
 // Build a unified ledger (purchases as debit, payments as credit)
 $ledger = [];
 foreach ($purchases_data as $p) {
@@ -232,8 +361,7 @@ usort($ledger, function($a, $b) { return strcmp($a['date'], $b['date']); });
             <label class="small">Payment Method</label>
             <select name="payment_method" class="form-control">
               <option value="cash">Cash</option>
-              <option value="card">Card</option>
-              <option value="bank_transfer">Bank Transfer</option>
+              <option value="bank">Bank</option>
             </select>
           </div>
           <div class="form-group">
@@ -290,7 +418,7 @@ usort($ledger, function($a, $b) { return strcmp($a['date'], $b['date']); });
                     <td><?= formatDate($p['payment_date']) ?></td>
                     <td><span class="badge badge-secondary">#<?= $p['id'] ?></span></td>
                     <td class="text-right font-weight-bold text-danger"><?= formatCurrency($p['amount']) ?></td>
-                    <td><span class="badge badge-<?= $p['payment_method'] === 'cash' ? 'success' : ($p['payment_method'] === 'card' ? 'info' : 'primary') ?> status-badge"><?= ucfirst(str_replace('_', ' ', $p['payment_method'])) ?></span></td>
+                    <td><span class="badge badge-<?= $p['payment_method'] === 'cash' ? 'success' : 'info' ?> status-badge"><?= ucfirst($p['payment_method'] === 'cash' ? 'Cash' : 'Bank') ?></span></td>
                     <td class="small"><?= htmlspecialchars($p['description'] ?? '-') ?></td>
                     <td><?= htmlspecialchars($p['added_by'] ?? '-') ?></td>
                     <td><a href="supplier_view.php?id=<?= $id ?>&tab=payments&del_payment=<?= $p['id'] ?>" class="btn btn-sm btn-danger" onclick="return confirm('Delete?')"><i class="fas fa-trash"></i></a></td>

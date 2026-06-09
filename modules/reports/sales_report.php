@@ -34,7 +34,7 @@ $total_down = 0;
 $total_financed = 0;
 $total_paid_via_payments = 0;
 
-$method_totals = ['cash' => 0, 'card' => 0, 'bank_transfer' => 0, 'mixed' => 0];
+$method_totals = ['cash' => 0, 'bank' => 0, 'mixed' => 0];
 $status_counts = ['paid' => 0, 'partial' => 0, 'installment' => 0, 'pending' => 0];
 $daily_totals = [];
 
@@ -46,7 +46,7 @@ foreach ($sales as $s) {
     $total_down += $down;
     $total_financed += $fin;
 
-    $method = $s['payment_method'];
+    $method = in_array($s['payment_method'], ['card', 'bank_transfer']) ? 'bank' : $s['payment_method'];
     if (isset($method_totals[$method])) $method_totals[$method] += $amt;
 
     $ps = $s['payment_status'];
@@ -61,8 +61,7 @@ foreach ($sales as $s) {
 // Payment method colors
 $method_colors = [
     'cash' => ['badge' => 'success', 'icon' => 'money-bill-wave'],
-    'card' => ['badge' => 'info', 'icon' => 'credit-card'],
-    'bank_transfer' => ['badge' => 'primary', 'icon' => 'university'],
+    'bank' => ['badge' => 'info', 'icon' => 'university'],
     'mixed' => ['badge' => 'warning', 'icon' => 'random'],
 ];
 ?>

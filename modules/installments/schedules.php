@@ -4,6 +4,59 @@ $page_title = 'Installment Schedules';
 $base_url = '../../';
 require_once '../../includes/functions.php';
 
+// Handle payment collection inline
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['collect_payment'])) {
+    $inst_id = (int)($_POST['inst_id'] ?? 0);
+    $pay_amount = (float)($_POST['amount'] ?? 0);
+    $payment_method = $_POST['payment_method'] ?? 'cash';
+    $payment_date = $_POST['payment_date'] ?? date('Y-m-d');
+    $reference_no = $_POST['reference_no'] ?? '';
+    $notes = $_POST['notes'] ?? '';
+
+    if ($pay_amount > 0 && $inst_id) {
+        $inst = getById('sale_installments', $inst_id);
+        if ($inst) {
+            $new_paid = $inst['paid_amount'] + $pay_amount;
+            $new_balance = $inst['amount'] - $new_paid;
+            $new_status = $new_balance <= 0 ? 'paid' : ($new_paid > 0 ? 'partial' : $inst['status']);
+
+            update('sale_installments', [
+                'paid_amount' => $new_paid,
+                'balance' => max(0, $new_balance),
+                'status' => $new_status,
+                'paid_date' => $new_status === 'paid' ? $payment_date : $inst['paid_date'],
+                'updated_at' => date('Y-m-d'),
+            ], $inst_id);
+
+            $payment_id = insert('payments', [
+                'sale_id' => $inst['sale_id'],
+                'installment_id' => $inst_id,
+                'payment_date' => $payment_date,
+                'amount' => $pay_amount,
+                'payment_type' => 'installment',
+                'payment_method' => $payment_method,
+                'reference_no' => $reference_no ?: null,
+                'notes' => $notes,
+                'branch_id' => $_SESSION['branch_id'] ?? null,
+                'received_by' => $_SESSION['user_id'] ?? null,
+                'created_at' => date('Y-m-d'),
+            ]);
+
+            if ($payment_method === 'cash') {
+                recordCashInflow($pdo, $payment_date, $pay_amount, 'Installment - Sale #' . $inst['sale_id'], 'payment', $payment_id, $_SESSION['user_id'] ?? null);
+            } elseif ($payment_method === 'bank') {
+                recordBankInflow($pdo, $payment_date, $pay_amount, 'Installment (bank) - Sale #' . $inst['sale_id'], 'payment', $payment_id, $_SESSION['user_id'] ?? null);
+            }
+
+            $_SESSION['success'] = 'Payment of ' . formatCurrency($pay_amount) . ' recorded';
+        }
+    } else {
+        $_SESSION['error'] = 'Invalid amount or installment';
+    }
+    header("Location: schedules.php?" . ($_SERVER['QUERY_STRING'] ?? ''));
+    exit;
+}
+
 $status = $_GET['status'] ?? '';
 $customer_id = (int)($_GET['customer_id'] ?? 0);
 $from_date = $_GET['from_date'] ?? '';
@@ -11,7 +64,8 @@ $to_date = $_GET['to_date'] ?? '';
 
 $sql = "SELECT si.*, s.invoice_no, s.total_amount, s.customer_id, s.sale_date,
         c.full_name AS customer_name, c.phone AS customer_phone,
-        ip.name AS plan_name
+        ip.name AS plan_name,
+        (SELECT p.id FROM payments p WHERE p.installment_id = si.id ORDER BY p.id DESC LIMIT 1) AS payment_id
         FROM sale_installments si
         JOIN sales s ON si.sale_id = s.id
         JOIN customers c ON s.customer_id = c.id
@@ -163,10 +217,11 @@ foreach ($items as $i) {
                 </div>
               </td>
               <td>
-                <?php if ($si['status'] !== 'paid'): ?>
-                  <a href="collect.php?installment_id=<?=$si['id']?>&sale_id=<?=$si['sale_id']?>" class="btn btn-sm btn-success"><i class="fas fa-hand-holding-usd"></i> Collect</a>
+                <?php if ($si['payment_id']): ?>
+                  <a href="<?=$base_url?>modules/payments/receipt.php?id=<?=$si['payment_id']?>" class="btn btn-sm btn-info" title="View"><i class="fas fa-eye"></i></a>
+                  <a href="<?=$base_url?>modules/payments/receipt.php?id=<?=$si['payment_id']?>&print=1" class="btn btn-sm btn-secondary" title="Print" target="_blank"><i class="fas fa-print"></i></a>
                 <?php else: ?>
-                  <button class="btn btn-sm btn-success" disabled><i class="fas fa-check"></i> Paid</button>
+                  <button class="btn btn-sm btn-success" onclick="openPayment(<?=$si['id']?>, '<?=htmlspecialchars($si['invoice_no'])?>', '<?=htmlspecialchars($si['customer_name'])?>', <?=$si['installment_no']?>, <?=$si['amount']?>, <?=$si['paid_amount']?>)"><i class="fas fa-hand-holding-usd"></i> Collect</button>
                 <?php endif; ?>
               </td>
             </tr>
@@ -176,5 +231,87 @@ foreach ($items as $i) {
     </div>
   </div>
 </div>
+
+<!-- Payment Modal -->
+<div class="modal fade" id="paymentModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post">
+        <div class="modal-header">
+          <h6 class="modal-title"><i class="fas fa-hand-holding-usd text-success"></i> Collect Payment</h6>
+          <button type="button" class="close" data-dismiss="modal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" name="inst_id" id="instId">
+          <div class="bg-light rounded p-3 mb-3">
+            <div class="d-flex justify-content-between"><span class="text-muted">Invoice</span><strong id="modalInvoice">-</strong></div>
+            <div class="d-flex justify-content-between"><span class="text-muted">Customer</span><strong id="modalCustomer">-</strong></div>
+            <div class="d-flex justify-content-between"><span class="text-muted">Installment #</span><strong id="modalInstNo">-</strong></div>
+            <div class="d-flex justify-content-between"><span class="text-muted">Amount Due</span><strong id="modalDue">-</strong></div>
+            <div class="d-flex justify-content-between"><span class="text-muted">Already Paid</span><strong id="modalPaid">-</strong></div>
+            <hr class="my-2">
+            <div class="d-flex justify-content-between"><span class="h5 mb-0">Balance</span><span class="h5 mb-0 font-weight-bold text-success" id="modalBalance">-</span></div>
+          </div>
+          <div class="row">
+            <div class="col-6">
+              <div class="form-group mb-2">
+                <label class="small text-muted">Payment Date</label>
+                <input type="date" name="payment_date" class="form-control" value="<?=date('Y-m-d')?>" required>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="form-group mb-2">
+                <label class="small text-muted">Method</label>
+                <select name="payment_method" class="form-control" required>
+                  <option value="cash">Cash</option>
+                  <option value="bank">Bank</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="form-group mb-2">
+            <label class="small text-muted">Payment Amount</label>
+            <input type="number" name="amount" id="payAmount" class="form-control form-control-lg font-weight-bold" step="0.01" min="0.01" required>
+          </div>
+          <div class="row">
+            <div class="col-6">
+              <div class="form-group mb-2">
+                <label class="small text-muted">Reference No.</label>
+                <input type="text" name="reference_no" class="form-control" placeholder="Optional">
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="form-group mb-2">
+                <label class="small text-muted">Notes</label>
+                <textarea name="notes" class="form-control" rows="1" placeholder="Optional"></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+          <button type="submit" name="collect_payment" class="btn btn-success"><i class="fas fa-save"></i> Record Payment</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+
+<script>
+function openPayment(id, invoice, customer, instNo, amount, paid) {
+  document.getElementById('instId').value = id;
+  document.getElementById('modalInvoice').textContent = invoice;
+  document.getElementById('modalCustomer').textContent = customer;
+  document.getElementById('modalInstNo').textContent = '#' + instNo;
+  document.getElementById('modalDue').textContent = 'PKR ' + parseFloat(amount).toLocaleString('en-US', {minimumFractionDigits:2});
+  document.getElementById('modalPaid').textContent = 'PKR ' + parseFloat(paid).toLocaleString('en-US', {minimumFractionDigits:2});
+  var bal = amount - paid;
+  document.getElementById('modalBalance').textContent = 'PKR ' + bal.toLocaleString('en-US', {minimumFractionDigits:2});
+  document.getElementById('payAmount').value = bal > 0 ? bal.toFixed(2) : '';
+  document.getElementById('payAmount').max = amount;
+  $('#paymentModal').modal('show');
+}
+</script>
 
 <?php require_once '../../includes/footer.php'; ?>

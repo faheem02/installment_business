@@ -26,7 +26,7 @@ $payment = $stmt->fetch();
 
 if (!$payment) {
     $_SESSION['error'] = 'Receipt not found.';
-    header("Location: index.php");
+    header("Location: ../../modules/installments/schedules.php");
     exit;
 }
 
@@ -58,7 +58,7 @@ $title = 'Receipt ' . $receipt_no;
 
 <div class="no-print text-center mt-3 mb-3">
   <button class="btn btn-primary" onclick="window.print()"><i class="fas fa-print"></i> Print</button>
-  <a href="index.php" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back to Receipts</a>
+  <a href="../../modules/installments/schedules.php" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back to Schedules</a>
 </div>
 
 <div class="wrap">
@@ -95,8 +95,8 @@ $title = 'Receipt ' . $receipt_no;
     <p class="text-muted mb-1">Amount Received</p>
     <div class="amount"><?= formatCurrency($payment['amount']) ?></div>
     <p class="mb-0 mt-2">
-      <span class="badge badge-<?= $payment['payment_method'] === 'cash' ? 'success' : ($payment['payment_method'] === 'card' ? 'info' : 'primary') ?> px-3 py-1">
-        <?= ucfirst($payment['payment_method']) ?>
+      <span class="badge badge-<?= $payment['payment_method'] === 'cash' ? 'success' : 'info' ?> px-3 py-1">
+        <?= $payment['payment_method'] === 'cash' ? 'Cash' : 'Bank' ?>
       </span>
       <span class="badge badge-secondary px-3 py-1 ml-1">
         <?= ucfirst(str_replace('_', ' ', $payment['payment_type'])) ?>

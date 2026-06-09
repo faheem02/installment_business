@@ -18,6 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $plan_id = !empty($_POST['installment_plan_id']) ? (int)$_POST['installment_plan_id'] : null;
     $manual_months = (int)($_POST['manual_months'] ?? 0);
     $notes = trim($_POST['notes'] ?? '');
+    $payment_method = $_POST['payment_method'] ?? 'cash';
 
     if (empty($customer_id) || empty($descriptions)) {
         $_SESSION['error'] = 'Please select a customer and add at least one item.';
@@ -100,13 +101,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'payment_date' => $sale_date,
             'amount' => $down_payment,
             'payment_type' => 'down_payment',
-            'payment_method' => 'cash',
+            'payment_method' => $payment_method,
             'notes' => 'Down payment for ' . $invoice_no,
             'branch_id' => $_SESSION['branch_id'] ?? null,
             'received_by' => $_SESSION['user_id'] ?? null,
             'created_at' => date('Y-m-d'),
         ]);
-        recordCashInflow($pdo, $sale_date, $down_payment, 'Down payment - ' . $invoice_no, 'payment', $pay_id, $_SESSION['user_id'] ?? null);
+        if ($payment_method === 'cash') {
+            recordCashInflow($pdo, $sale_date, $down_payment, 'Down payment - ' . $invoice_no, 'payment', $pay_id, $_SESSION['user_id'] ?? null);
+        } elseif ($payment_method === 'bank') {
+            recordBankInflow($pdo, $sale_date, $down_payment, 'Down payment (bank) - ' . $invoice_no, 'payment', $pay_id, $_SESSION['user_id'] ?? null);
+        }
     }
 
     if ($financed_amount > 0) {
@@ -268,6 +273,15 @@ require_once '../../includes/header.php';
               <div class="form-group mb-2">
                 <label class="small text-muted">Down Payment <span class="text-danger">*</span></label>
                 <input type="number" name="down_payment" id="downPayment" class="form-control form-control-lg font-weight-bold" step="0.01" min="0" value="0" placeholder="Upfront payment">
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="form-group mb-2">
+                <label class="small text-muted">Payment Method</label>
+                <select name="payment_method" id="paymentMethod" class="form-control">
+                  <option value="cash">Cash</option>
+                  <option value="bank">Bank</option>
+                </select>
               </div>
             </div>
           </div>
