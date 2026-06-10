@@ -78,7 +78,7 @@ require_once '../../includes/header.php';
           <select name="supplier_id" class="form-control">
             <option value="">Select Supplier</option>
             <?php foreach ($suppliers as $s): ?>
-              <option value="<?=$s['id']?>" <?=$purchase['supplier_id']==$s['id']?'selected':''?>><?=htmlspecialchars($s['name'])?></option>
+              <option value="<?=$s['id']?>" <?=$purchase['supplier_id']==$s['id']?'selected':''?>><?=htmlspecialchars($s['contact_person'] ? $s['contact_person'] . ' (' . $s['name'] . ')' : $s['name'])?></option>
             <?php endforeach; ?>
           </select>
         </div>

@@ -137,10 +137,16 @@ function recordCashInflow($pdo, $date, $amount, $description, $reference_type = 
     $update->execute([$amount, $daily_id]);
 }
 
-// Record bank inflow (for card payments)
-function recordBankInflow($pdo, $date, $amount, $description, $reference_type = null, $reference_id = null, $created_by = null) {
-    $stmt = $pdo->query("SELECT id, current_balance FROM bank_accounts WHERE status = 1 ORDER BY id ASC LIMIT 1");
-    $account = $stmt->fetch();
+// Record bank inflow
+function recordBankInflow($pdo, $date, $amount, $description, $reference_type = null, $reference_id = null, $created_by = null, $bank_account_id = null) {
+    if ($bank_account_id) {
+        $stmt = $pdo->prepare("SELECT id, current_balance FROM bank_accounts WHERE id = ? AND status = 1");
+        $stmt->execute([$bank_account_id]);
+        $account = $stmt->fetch();
+    } else {
+        $stmt = $pdo->query("SELECT id, current_balance FROM bank_accounts WHERE status = 1 ORDER BY id ASC LIMIT 1");
+        $account = $stmt->fetch();
+    }
     if (!$account) {
         $account_id = insert('bank_accounts', [
             'account_name' => 'Default Account',
@@ -168,6 +174,86 @@ function recordBankInflow($pdo, $date, $amount, $description, $reference_type = 
     ]);
 
     $pdo->prepare("UPDATE bank_accounts SET current_balance = current_balance + ? WHERE id = ?")->execute([$amount, $account['id']]);
+    return $account['id'];
+}
+
+// Record a cash outflow
+function recordCashOutflow($pdo, $date, $amount, $description, $reference_type = null, $reference_id = null, $created_by = null) {
+    $today = $date ?: date('Y-m-d');
+    $daily = $pdo->prepare("SELECT * FROM cash_book_daily WHERE date = ?");
+    $daily->execute([$today]);
+    $daily_rec = $daily->fetch();
+
+    if ($daily_rec) {
+        $daily_id = $daily_rec['id'];
+    } else {
+        $prev = $pdo->query("SELECT closing_balance FROM cash_book_daily WHERE date < '$today' ORDER BY date DESC LIMIT 1")->fetch();
+        $opening = $prev ? (float)$prev['closing_balance'] : 0;
+        $daily_id = insert('cash_book_daily', [
+            'date' => $today,
+            'opening_balance' => $opening,
+            'total_inflow' => 0,
+            'total_outflow' => 0,
+            'closing_balance' => $opening,
+            'status' => 'open',
+            'created_by' => $created_by,
+            'created_at' => date('Y-m-d'),
+        ]);
+    }
+
+    insert('cash_book', [
+        'daily_id' => $daily_id,
+        'transaction_date' => $today,
+        'transaction_type' => 'outflow',
+        'amount' => $amount,
+        'description' => $description,
+        'reference_type' => $reference_type,
+        'reference_id' => $reference_id,
+        'created_by' => $created_by,
+        'created_at' => date('Y-m-d'),
+    ]);
+
+    $update = $pdo->prepare("UPDATE cash_book_daily SET total_outflow = total_outflow + ?, closing_balance = opening_balance + total_inflow - total_outflow WHERE id = ?");
+    $update->execute([$amount, $daily_id]);
+}
+
+// Record bank outflow
+function recordBankOutflow($pdo, $date, $amount, $description, $reference_type = null, $reference_id = null, $created_by = null, $bank_account_id = null) {
+    if ($bank_account_id) {
+        $stmt = $pdo->prepare("SELECT id, current_balance FROM bank_accounts WHERE id = ? AND status = 1");
+        $stmt->execute([$bank_account_id]);
+        $account = $stmt->fetch();
+    } else {
+        $stmt = $pdo->query("SELECT id, current_balance FROM bank_accounts WHERE status = 1 ORDER BY id ASC LIMIT 1");
+        $account = $stmt->fetch();
+    }
+    if (!$account) {
+        $account_id = insert('bank_accounts', [
+            'account_name' => 'Default Account',
+            'bank_name' => 'Default Bank',
+            'account_no' => 'AUTO-' . date('YmdHis'),
+            'account_type' => 'current',
+            'opening_balance' => 0,
+            'current_balance' => 0,
+            'status' => 1,
+            'created_at' => $date,
+        ]);
+        $account = ['id' => $account_id, 'current_balance' => 0];
+    }
+
+    insert('bank_transactions', [
+        'bank_account_id' => $account['id'],
+        'transaction_date' => $date,
+        'transaction_type' => 'withdrawal',
+        'amount' => $amount,
+        'description' => $description,
+        'reference_type' => $reference_type,
+        'reference_id' => $reference_id,
+        'created_by' => $created_by ?: 1,
+        'created_at' => date('Y-m-d'),
+    ]);
+
+    $pdo->prepare("UPDATE bank_accounts SET current_balance = current_balance - ? WHERE id = ?")->execute([$amount, $account['id']]);
     return $account['id'];
 }
 

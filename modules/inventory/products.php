@@ -8,7 +8,7 @@ $search = $_GET['search'] ?? '';
 $cat_id = (int)($_GET['category_id'] ?? 0);
 $supplier_id = (int)($_GET['supplier_id'] ?? 0);
 
-$sql = "SELECT p.*, c.name AS category_name, b.name AS brand_name, s.name AS supplier_name FROM products p LEFT JOIN categories c ON p.category_id=c.id LEFT JOIN brands b ON p.brand_id=b.id LEFT JOIN suppliers s ON p.supplier_id=s.id WHERE 1=1";
+$sql = "SELECT p.*, c.name AS category_name, b.name AS brand_name, s.name AS supplier_name, s.contact_person AS supplier_contact FROM products p LEFT JOIN categories c ON p.category_id=c.id LEFT JOIN brands b ON p.brand_id=b.id LEFT JOIN suppliers s ON p.supplier_id=s.id WHERE 1=1";
 $params = [];
 if ($search) { $sql .= " AND (p.code LIKE ? OR p.name LIKE ?)"; $params[] = "%$search%"; $params[] = "%$search%"; }
 if ($cat_id) { $sql .= " AND p.category_id=?"; $params[] = $cat_id; }
@@ -49,7 +49,7 @@ require_once '../../includes/header.php';
           <select name="supplier_id" class="form-control">
             <option value="">All Suppliers</option>
             <?php $all_suppliers = getAll('suppliers', 'name ASC'); foreach ($all_suppliers as $sup): ?>
-              <option value="<?=$sup['id']?>" <?=$supplier_id===$sup['id']?'selected':''?>><?=htmlspecialchars($sup['name'])?></option>
+              <option value="<?=$sup['id']?>" <?=$supplier_id===$sup['id']?'selected':''?>><?=htmlspecialchars($sup['contact_person'] ? $sup['contact_person'] . ' (' . $sup['name'] . ')' : $sup['name'])?></option>
             <?php endforeach; ?>
           </select>
         </div>
@@ -79,7 +79,7 @@ require_once '../../includes/header.php';
               <td><span class="badge badge-info"><?=ucfirst($p['product_type']??'general')?></span></td>
               <td><?=htmlspecialchars($p['category_name']??'-')?></td>
               <td><?=htmlspecialchars($p['brand_name']??'-')?></td>
-              <td><?=htmlspecialchars($p['supplier_name']??'-')?></td>
+              <td><?php if ($p['supplier_name']): $_c = $p['supplier_contact'] ?? ''; echo htmlspecialchars($_c ? "$_c ({$p['supplier_name']})" : $p['supplier_name']); else: echo '-'; endif; ?></td>
               <td class="text-right"><?=formatCurrency($p['sale_price'])?></td>
               <td><span class="badge badge-<?=$p['status']?'success':'secondary'?>"><?=$p['status']?'Active':'Inactive'?></span></td>
               <td>
@@ -143,7 +143,8 @@ $(document).ready(function() {
     r('Type', p.product_type ? p.product_type.charAt(0).toUpperCase() + p.product_type.slice(1) : 'General');
     r('Category', p.category_name || '-');
     r('Brand', p.brand_name || '-');
-    r('Supplier', p.supplier_name || '-');
+    var supDisplay = p.supplier_contact ? p.supplier_contact + ' (' + (p.supplier_name || '-') + ')' : (p.supplier_name || '-');
+    r('Supplier', supDisplay);
     r('Description', p.description);
     r('Purchase Price', p.purchase_price ? parseFloat(p.purchase_price).toLocaleString(undefined, {minimumFractionDigits:2}) : '0.00');
     r('Sale Price', p.sale_price ? parseFloat(p.sale_price).toLocaleString(undefined, {minimumFractionDigits:2}) : '0.00');
@@ -179,7 +180,8 @@ $(document).ready(function() {
         } else {
           var h = '';
           data.forEach(function(pr) {
-            h += '<tr><td>' + pr.purchase_date + '</td><td>' + (pr.supplier_name || '-') + '</td><td>' + (pr.invoice_no || '-') + '</td><td class="text-right">' + pr.quantity + '</td><td class="text-right">' + parseFloat(pr.purchase_price).toFixed(2) + '</td></tr>';
+            var supDisp = pr.supplier_contact ? pr.supplier_contact + ' (' + (pr.supplier_name || '-') + ')' : (pr.supplier_name || '-');
+            h += '<tr><td>' + pr.purchase_date + '</td><td>' + supDisp + '</td><td>' + (pr.invoice_no || '-') + '</td><td class="text-right">' + pr.quantity + '</td><td class="text-right">' + parseFloat(pr.purchase_price).toFixed(2) + '</td></tr>';
           });
           $('#vpPurchases').html(h);
         }

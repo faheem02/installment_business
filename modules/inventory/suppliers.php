@@ -43,7 +43,7 @@ require_once '../../includes/header.php';
             <tr>
               <td><?= $i + 1 ?></td>
               <td><span class="badge badge-secondary"><?= $c['id'] ?></span></td>
-              <td><strong><?= htmlspecialchars($c['name']) ?></strong></td>
+              <td><strong><?= htmlspecialchars($c['contact_person']) ?></strong><?= $c['name'] ? '<br><span class="text-muted">' . htmlspecialchars($c['name']) . '</span>' : '' ?></td>
               <td><?= htmlspecialchars($c['phone'] ?? '-') ?></td>
               <td><?= htmlspecialchars($c['city'] ?? ($c['address'] ?? '-')) ?></td>
               <td class="text-right font-weight-bold" style="color:#0f172a;"><?= formatCurrency($closing) ?></td>

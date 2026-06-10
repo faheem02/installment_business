@@ -5,7 +5,7 @@ $product_id = (int)($_GET['product_id'] ?? 0);
 if (!$product_id) { echo json_encode([]); exit; }
 
 $stmt = $pdo->prepare("
-    SELECT pu.purchase_date, s.name AS supplier_name, pu.invoice_no,
+    SELECT pu.purchase_date, s.name AS supplier_name, s.contact_person AS supplier_contact, pu.invoice_no,
            pi.quantity, pi.purchase_price
     FROM purchase_items pi
     JOIN purchases pu ON pu.id = pi.purchase_id

@@ -12,6 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['collect_payment'])) {
     $payment_date = $_POST['payment_date'] ?? date('Y-m-d');
     $reference_no = $_POST['reference_no'] ?? '';
     $notes = $_POST['notes'] ?? '';
+    $bank_account_id = (int)($_POST['bank_account_id'] ?? 0);
 
     if ($pay_amount > 0 && $inst_id) {
         $inst = getById('sale_installments', $inst_id);
@@ -45,7 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['collect_payment'])) {
             if ($payment_method === 'cash') {
                 recordCashInflow($pdo, $payment_date, $pay_amount, 'Installment - Sale #' . $inst['sale_id'], 'payment', $payment_id, $_SESSION['user_id'] ?? null);
             } elseif ($payment_method === 'bank') {
-                recordBankInflow($pdo, $payment_date, $pay_amount, 'Installment (bank) - Sale #' . $inst['sale_id'], 'payment', $payment_id, $_SESSION['user_id'] ?? null);
+                recordBankInflow($pdo, $payment_date, $pay_amount, 'Installment (bank) - Sale #' . $inst['sale_id'], 'payment', $payment_id, $_SESSION['user_id'] ?? null, $bank_account_id);
             }
 
             $_SESSION['success'] = 'Payment of ' . formatCurrency($pay_amount) . ' recorded';
@@ -81,6 +82,7 @@ $stmt = $pdo->prepare($sql); $stmt->execute($params);
 $items = $stmt->fetchAll();
 
 $customers = getAll('customers', 'full_name ASC');
+$bank_accounts = getAll('bank_accounts', 'bank_name ASC, account_name ASC');
 
 require_once '../../includes/header.php';
 ?>
@@ -262,10 +264,23 @@ foreach ($items as $i) {
             <div class="col-6">
               <div class="form-group mb-2">
                 <label class="small text-muted">Method</label>
-                <select name="payment_method" class="form-control" required>
+                <select name="payment_method" class="form-control payment-method-select" required>
                   <option value="cash">Cash</option>
                   <option value="bank">Bank</option>
                 </select>
+              </div>
+            </div>
+            <div class="bank-account-row" style="display:none;">
+              <div class="col-12">
+                <div class="form-group mb-2">
+                  <label class="small text-muted">Bank Account</label>
+                  <select name="bank_account_id" class="form-control">
+                    <option value="">Select Account</option>
+                    <?php foreach ($bank_accounts as $ba): ?>
+                      <option value="<?= $ba['id'] ?>"><?= htmlspecialchars($ba['bank_name'] . ' - ' . $ba['account_name']) ?></option>
+                    <?php endforeach; ?>
+                  </select>
+                </div>
               </div>
             </div>
           </div>
@@ -299,6 +314,10 @@ foreach ($items as $i) {
 
 
 <script>
+$(document).on('change', '.payment-method-select', function() {
+    $(this).closest('.modal-body').find('.bank-account-row').toggle($(this).val() === 'bank');
+});
+
 function openPayment(id, invoice, customer, instNo, amount, paid) {
   document.getElementById('instId').value = id;
   document.getElementById('modalInvoice').textContent = invoice;

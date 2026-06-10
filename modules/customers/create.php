@@ -188,10 +188,6 @@ require_once '../../includes/header.php';
           <textarea name="g_address_1" class="form-control" rows="2"></textarea>
         </div>
         <div class="col-md-3 mb-3">
-          <label class="form-label">Guardian Name</label>
-          <input type="text" name="g_guardian_1" class="form-control">
-        </div>
-        <div class="col-md-3 mb-3">
           <label class="form-label">Occupation</label>
           <input type="text" name="g_occupation_1" class="form-control">
         </div>
@@ -200,7 +196,7 @@ require_once '../../includes/header.php';
   </div>
 
   <!-- Guarantor 2 -->
-  <div class="card shadow mb-4">
+  <!-- <div class="card shadow mb-4">
     <div class="card-header py-3">
       <h6 class="m-0 font-weight-bold text-info"><i class="fas fa-handshake"></i> Guarantor / Co-Borrower 2</h6>
     </div>
@@ -244,7 +240,7 @@ require_once '../../includes/header.php';
         </div>
       </div>
     </div>
-  </div>
+  </div> -->
 
   <!-- Notes -->
   <div class="card shadow mb-4">

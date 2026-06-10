@@ -12,9 +12,12 @@ $users = $pdo->query("SELECT id, username FROM users ORDER BY username")->fetchA
 
 // Handle Overview financial update
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_financials'])) {
+    $adj_amount = (float)($_POST['adjustment_amount'] ?? 0);
+    $adj_type = $_POST['adjustment_type'] ?? 'plus';
+    $adjustment_save = ($adj_type === 'minus' ? -1 : 1) * $adj_amount;
     update('suppliers', [
         'opening_balance' => (float)($_POST['opening_balance'] ?? 0),
-        'adjustment' => (float)($_POST['adjustment'] ?? 0),
+        'adjustment' => $adjustment_save,
         'updated_at' => date('Y-m-d'),
     ], $id);
     $_SESSION['success'] = 'Financial details updated';
@@ -85,6 +88,37 @@ $purchase_items = $pdo->prepare("
 $purchase_items->execute([$id]);
 $purchase_items_data = $purchase_items->fetchAll();
 
+// Build unified ledger (purchases as debit, payments as credit)
+$ledger = [];
+foreach ($purchases_data as $p) {
+    $ledger[] = [
+        'date' => $p['purchase_date'],
+        'type' => 'purchase',
+        'ref' => $p['invoice_no'] ?? '#' . $p['id'],
+        'debit' => (float)$p['total_amount'],
+        'credit' => 0,
+        'desc' => 'Products supplied',
+        'status' => $p['status'],
+        'id' => $p['id'],
+    ];
+}
+foreach ($payments_data as $p) {
+    $ledger[] = [
+        'date' => $p['payment_date'],
+        'type' => 'payment',
+        'ref' => '#' . $p['id'],
+        'debit' => 0,
+        'credit' => (float)$p['amount'],
+        'desc' => $p['description'] ?? 'Cash paid',
+        'status' => null,
+        'method' => $p['payment_method'],
+        'id' => $p['id'],
+    ];
+}
+usort($ledger, function($a, $b) { return strcmp($a['date'], $b['date']); });
+$ledger_debit_total = array_sum(array_column($ledger, 'debit'));
+$ledger_credit_total = array_sum(array_column($ledger, 'credit'));
+
 $tab = $_GET['tab'] ?? 'overview';
 
 // Handle CSV download
@@ -112,7 +146,7 @@ require_once '../../includes/header.php';
 </style>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
-  <h5 class="m-0 font-weight-bold" style="color:#0f172a;"><i class="fas fa-truck"></i> <?= htmlspecialchars($supplier['name']) ?></h5>
+  <h5 class="m-0 font-weight-bold" style="color:#0f172a;"><i class="fas fa-truck"></i> <?= htmlspecialchars($supplier['contact_person']) ?> <?= $supplier['name'] ? '<small class="text-muted font-weight-normal">(' . htmlspecialchars($supplier['name']) . ')</small>' : '' ?></h5>
   <a href="suppliers.php" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
 </div>
 
@@ -122,6 +156,9 @@ require_once '../../includes/header.php';
   </li>
   <li class="nav-item">
     <a class="nav-link <?= $tab === 'payments' ? 'active' : '' ?>" href="supplier_view.php?id=<?= $id ?>&tab=payments"><i class="fas fa-hand-holding-usd"></i> Transactions</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link <?= $tab === 'ledger' ? 'active' : '' ?>" href="supplier_view.php?id=<?= $id ?>&tab=ledger"><i class="fas fa-balance-scale"></i> Ledger</a>
   </li>
 </ul>
 
@@ -183,16 +220,24 @@ require_once '../../includes/header.php';
         <button class="btn btn-sm btn-outline-primary" onclick="$('#editFinancials').toggleClass('d-none')"><i class="fas fa-pen"></i> Edit</button>
       </div>
       <div class="card-body">
+        <?php $adj_val = (float)$supplier['adjustment']; $adj_type = $adj_val >= 0 ? 'plus' : 'minus'; $adj_abs = abs($adj_val); ?>
         <div id="editFinancials" class="d-none mb-4 p-3 bg-light rounded border">
           <form method="post">
             <div class="form-row">
-              <div class="form-group col-md-6 mb-2">
+              <div class="form-group col-md-4 mb-2">
                 <label class="small text-muted">Opening Balance</label>
                 <input type="number" name="opening_balance" class="form-control form-control-sm" step="0.01" value="<?= $supplier['opening_balance'] ?>">
               </div>
-              <div class="form-group col-md-6 mb-2">
-                <label class="small text-muted">Adjustment</label>
-                <input type="number" name="adjustment" class="form-control form-control-sm" step="0.01" value="<?= $supplier['adjustment'] ?>">
+              <div class="form-group col-md-4 mb-2">
+                <label class="small text-muted">Adjustment Type</label>
+                <select name="adjustment_type" class="form-control form-control-sm">
+                  <option value="plus" <?=$adj_type==='plus'?'selected':''?>>Plus (+)</option>
+                  <option value="minus" <?=$adj_type==='minus'?'selected':''?>>Minus (-)</option>
+                </select>
+              </div>
+              <div class="form-group col-md-4 mb-2">
+                <label class="small text-muted">Adjustment Amount</label>
+                <input type="number" name="adjustment_amount" class="form-control form-control-sm" step="0.01" value="<?=$adj_abs?>" min="0">
               </div>
             </div>
             <button type="submit" name="update_financials" class="btn btn-primary btn-sm"><i class="fas fa-save"></i> Update</button>
@@ -237,7 +282,7 @@ require_once '../../includes/header.php';
         </div>
         <hr>
         <div class="text-right">
-          <a href="supplier_view.php?id=<?=$id?>&tab=payments" class="btn btn-sm btn-success"><i class="fas fa-money-bill-wave"></i> View Full Ledger</a>
+          <a href="supplier_view.php?id=<?=$id?>&tab=ledger" class="btn btn-sm btn-info"><i class="fas fa-balance-scale"></i> View Full Ledger</a>
           <a href="supplier_view.php?id=<?=$id?>&tab=payments" class="btn btn-sm btn-primary"><i class="fas fa-exchange-alt"></i> Record Payment</a>
         </div>
       </div>
@@ -312,36 +357,6 @@ require_once '../../includes/header.php';
 </div>
 
 <?php elseif ($tab === 'payments'): ?>
-<?php
-// Build a unified ledger (purchases as debit, payments as credit)
-$ledger = [];
-foreach ($purchases_data as $p) {
-    $ledger[] = [
-        'date' => $p['purchase_date'],
-        'type' => 'purchase',
-        'ref' => $p['invoice_no'] ?? '#' . $p['id'],
-        'debit' => (float)$p['total_amount'],
-        'credit' => 0,
-        'desc' => 'Products supplied',
-        'status' => $p['status'],
-        'id' => $p['id'],
-    ];
-}
-foreach ($payments_data as $p) {
-    $ledger[] = [
-        'date' => $p['payment_date'],
-        'type' => 'payment',
-        'ref' => '#' . $p['id'],
-        'debit' => 0,
-        'credit' => (float)$p['amount'],
-        'desc' => $p['description'] ?? 'Cash paid',
-        'status' => null,
-        'method' => $p['payment_method'],
-        'id' => $p['id'],
-    ];
-}
-usort($ledger, function($a, $b) { return strcmp($a['date'], $b['date']); });
-?>
 <div class="row">
   <!-- LEFT: Record Payment -->
   <div class="col-lg-5 mb-4">
@@ -463,45 +478,63 @@ usort($ledger, function($a, $b) { return strcmp($a['date'], $b['date']); });
       </div>
     </div>
 
-    <!-- Full Ledger -->
-    <div class="card shadow">
-      <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-info"><i class="fas fa-balance-scale"></i> Account Ledger</h6></div>
-      <div class="card-body">
-        <?php if (empty($ledger)): ?>
-          <p class="text-muted mb-0 text-center">No transactions yet</p>
-        <?php else: ?>
-          <div class="table-responsive">
-            <table class="table table-bordered table-hover table-sm">
-              <thead class="thead-light">
-                <tr><th>Date</th><th>Ref</th><th>Description</th><th class="text-right">Debit (Supplied)</th><th class="text-right">Credit (Paid)</th><th class="text-right">Balance</th></tr>
-              </thead>
-              <tbody>
-                <?php $bal = $opening + $adjustment; foreach ($ledger as $l):
-                  $bal += $l['debit'] - $l['credit'];
-                ?>
-                  <tr class="<?= $l['type'] === 'purchase' ? '' : 'table-success' ?>">
-                    <td><?= formatDate($l['date']) ?></td>
-                    <td><span class="badge badge-<?= $l['type'] === 'purchase' ? 'primary' : 'success' ?>"><?= htmlspecialchars($l['ref']) ?></span></td>
-                    <td class="small"><?= htmlspecialchars($l['desc']) ?></td>
-                    <td class="text-right"><?= $l['debit'] ? formatCurrency($l['debit']) : '-' ?></td>
-                    <td class="text-right"><?= $l['credit'] ? formatCurrency($l['credit']) : '-' ?></td>
-                    <td class="text-right font-weight-bold"><?= formatCurrency($bal) ?></td>
-                  </tr>
-                <?php endforeach; ?>
-              </tbody>
-              <tfoot>
-                <tr class="font-weight-bold" style="background:#f8f9fc;">
-                  <td colspan="3" class="text-right">Closing Balance</td>
-                  <td class="text-right"><?= formatCurrency(array_sum(array_column($ledger, 'debit'))) ?></td>
-                  <td class="text-right"><?= formatCurrency(array_sum(array_column($ledger, 'credit'))) ?></td>
-                  <td class="text-right"><?= formatCurrency($closing) ?></td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        <?php endif; ?>
-      </div>
+  </div>
+</div>
+
+<?php elseif ($tab === 'ledger'): ?>
+<div class="card shadow mb-4">
+  <div class="card-header py-3 d-flex justify-content-between align-items-center">
+    <h6 class="m-0 font-weight-bold text-info"><i class="fas fa-balance-scale"></i> Supplier Ledger</h6>
+    <div>
+      <span class="badge badge-primary status-badge mr-2">Opening: <?= formatCurrency($opening + $adjustment) ?></span>
+      <span class="badge badge-success status-badge">Closing: <?= formatCurrency($closing) ?></span>
     </div>
+  </div>
+  <div class="card-body">
+    <?php if (empty($ledger)): ?>
+      <p class="text-muted mb-0 text-center py-3">No transactions found for this supplier.</p>
+    <?php else: ?>
+      <div class="table-responsive">
+        <table class="table table-bordered table-hover table-sm">
+          <thead class="thead-light">
+            <tr>
+              <th>Date</th>
+              <th>Ref</th>
+              <th>Description</th>
+              <th class="text-right">Debit (Supplied)</th>
+              <th class="text-right">Credit (Paid)</th>
+              <th class="text-right">Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="table-secondary">
+              <td colspan="5" class="text-right font-weight-bold">Opening Balance (incl. Adjustment)</td>
+              <td class="text-right font-weight-bold"><?= formatCurrency($opening + $adjustment) ?></td>
+            </tr>
+            <?php $bal = $opening + $adjustment; foreach ($ledger as $l):
+              $bal += $l['debit'] - $l['credit'];
+            ?>
+              <tr class="<?= $l['type'] === 'payment' ? 'table-success' : '' ?>">
+                <td class="text-nowrap"><?= formatDate($l['date']) ?></td>
+                <td><span class="badge badge-<?= $l['type'] === 'purchase' ? 'primary' : 'success' ?>"><?= htmlspecialchars($l['ref']) ?></span></td>
+                <td class="small"><?= htmlspecialchars($l['desc']) ?></td>
+                <td class="text-right"><?= $l['debit'] ? formatCurrency($l['debit']) : '-' ?></td>
+                <td class="text-right"><?= $l['credit'] ? formatCurrency($l['credit']) : '-' ?></td>
+                <td class="text-right font-weight-bold"><?= formatCurrency($bal) ?></td>
+              </tr>
+            <?php endforeach; ?>
+          </tbody>
+          <tfoot>
+            <tr class="font-weight-bold" style="background:#f8f9fc;">
+              <td colspan="3" class="text-right">Totals</td>
+              <td class="text-right"><?= formatCurrency($ledger_debit_total) ?></td>
+              <td class="text-right"><?= formatCurrency($ledger_credit_total) ?></td>
+              <td class="text-right"><?= formatCurrency($closing) ?></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    <?php endif; ?>
   </div>
 </div>
 

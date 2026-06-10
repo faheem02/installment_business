@@ -34,6 +34,7 @@ $data = [
     'notes' => $purchase['notes'],
     'created_at' => $purchase['created_at'],
     'supplier_name' => $supplier ? $supplier['name'] : '-',
+    'supplier_contact' => $supplier ? $supplier['contact_person'] : '',
     'items' => [],
     'serials' => []
 ];

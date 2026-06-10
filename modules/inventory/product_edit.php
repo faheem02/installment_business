@@ -74,6 +74,7 @@ require_once '../../includes/header.php';
             <option value="general" <?=$product_type==='general'?'selected':''?>>General</option>
             <option value="bike" <?=$product_type==='bike'?'selected':''?>>Bike</option>
             <option value="mobile" <?=$product_type==='mobile'?'selected':''?>>Mobile</option>
+            <option value="laptop" <?=$product_type==='laptop'?'selected':''?>>Laptop</option>
           </select>
         </div>
       </div>
@@ -118,7 +119,7 @@ require_once '../../includes/header.php';
                 <label class="form-label">Supplier</label>
                 <select name="supplier_id" class="form-control">
                   <option value="">Select Supplier</option>
-                  <?php foreach ($suppliers as $s): ?><option value="<?=$s['id']?>" <?=$item['supplier_id']==$s['id']?'selected':''?>><?=htmlspecialchars($s['name'])?></option><?php endforeach; ?>
+                  <?php foreach ($suppliers as $s): ?><option value="<?=$s['id']?>" <?=$item['supplier_id']==$s['id']?'selected':''?>><?=htmlspecialchars($s['contact_person'] ? $s['contact_person'] . ' (' . $s['name'] . ')' : $s['name'])?></option><?php endforeach; ?>
                 </select>
               </div>
             </div>
@@ -161,7 +162,7 @@ require_once '../../includes/header.php';
                 <label class="form-label">Supplier</label>
                 <select name="supplier_id" class="form-control">
                   <option value="">Select Supplier</option>
-                  <?php foreach ($suppliers as $s): ?><option value="<?=$s['id']?>" <?=$item['supplier_id']==$s['id']?'selected':''?>><?=htmlspecialchars($s['name'])?></option><?php endforeach; ?>
+                  <?php foreach ($suppliers as $s): ?><option value="<?=$s['id']?>" <?=$item['supplier_id']==$s['id']?'selected':''?>><?=htmlspecialchars($s['contact_person'] ? $s['contact_person'] . ' (' . $s['name'] . ')' : $s['name'])?></option><?php endforeach; ?>
                 </select>
               </div>
             </div>
@@ -224,7 +225,7 @@ require_once '../../includes/header.php';
                 <label class="form-label">Supplier</label>
                 <select name="supplier_id" class="form-control">
                   <option value="">Select Supplier</option>
-                  <?php foreach ($suppliers as $s): ?><option value="<?=$s['id']?>" <?=$item['supplier_id']==$s['id']?'selected':''?>><?=htmlspecialchars($s['name'])?></option><?php endforeach; ?>
+                  <?php foreach ($suppliers as $s): ?><option value="<?=$s['id']?>" <?=$item['supplier_id']==$s['id']?'selected':''?>><?=htmlspecialchars($s['contact_person'] ? $s['contact_person'] . ' (' . $s['name'] . ')' : $s['name'])?></option><?php endforeach; ?>
                 </select>
               </div>
             </div>
@@ -318,11 +319,23 @@ function toggleProductType(type) {
   target.querySelectorAll('input, select, textarea').forEach(function(inp) {
     inp.disabled = false;
   });
+  var catSelect = target.querySelector('.category-select');
+  var currentVal = catSelect ? catSelect.value : '';
+  var firstVisible = null;
   target.querySelectorAll('.category-select option').forEach(function(opt) {
     if (opt.value === '') return;
     var optType = opt.getAttribute('data-type');
     opt.hidden = optType !== '' && optType !== type;
+    if (!opt.hidden && !firstVisible) firstVisible = opt;
   });
+  if (catSelect && currentVal) {
+    var currentHidden = Array.from(catSelect.options).find(function(o) { return o.value === currentVal; });
+    if (currentHidden && currentHidden.hidden) currentVal = '';
+  }
+  if (catSelect && (!currentVal || currentVal === '')) {
+    var matched = Array.from(catSelect.options).find(function(o) { return o.value && !o.hidden && o.text.toLowerCase() === type.toLowerCase(); });
+    catSelect.value = matched ? matched.value : (firstVisible ? firstVisible.value : '');
+  }
 }
 toggleProductType('<?=htmlspecialchars($product_type)?>');
 </script>

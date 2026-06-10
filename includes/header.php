@@ -193,11 +193,11 @@
       <div class="collapse <?= str_contains($_SERVER['PHP_SELF'],'reports') ? 'show' : '' ?>" id="collapseReports">
         <div class="collapse-inner">
           <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'reports/sales_report') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/reports/sales_report.php"><i class="fas fa-cart-plus"></i> Sales Report</a>
-          <a class="collapse-item" href="#"><i class="fas fa-undo"></i> Collection Report</a>
+          <!-- <a class="collapse-item" href="#"><i class="fas fa-undo"></i> Collection Report</a>
           <a class="collapse-item" href="#"><i class="fas fa-boxes"></i> Inventory Report</a>
           <a class="collapse-item" href="#"><i class="fas fa-coins"></i> Cash Book Report</a>
-          <a class="collapse-item" href="#"><i class="fas fa-university"></i> Bank Book Report</a>
-          <a class="collapse-item" href="#"><i class="fas fa-file-invoice"></i> Expense Report</a>
+          <a class="collapse-item" href="#"><i class="fas fa-university"></i> Bank Book Report</a>-->
+          <!-- <a class="collapse-item" href="#"><i class="fas fa-file-invoice"></i> Expense Report</a>  -->
         </div>
       </div>
     </div>

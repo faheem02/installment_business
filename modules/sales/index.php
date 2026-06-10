@@ -7,6 +7,7 @@ require_once '../../includes/functions.php';
 $customers = getAll('customers', 'full_name ASC');
 $plans = $pdo->query("SELECT * FROM installment_plans WHERE status = 1 ORDER BY name")->fetchAll();
 $all_products = $pdo->query("SELECT id, code, name, sale_price FROM products WHERE status = 1 ORDER BY name")->fetchAll();
+$bank_accounts = getAll('bank_accounts', 'bank_name ASC, account_name ASC');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $customer_id = (int)$_POST['customer_id'];
@@ -19,6 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $manual_months = (int)($_POST['manual_months'] ?? 0);
     $notes = trim($_POST['notes'] ?? '');
     $payment_method = $_POST['payment_method'] ?? 'cash';
+    $bank_account_id = (int)($_POST['bank_account_id'] ?? 0);
 
     if (empty($customer_id) || empty($descriptions)) {
         $_SESSION['error'] = 'Please select a customer and add at least one item.';
@@ -110,7 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($payment_method === 'cash') {
             recordCashInflow($pdo, $sale_date, $down_payment, 'Down payment - ' . $invoice_no, 'payment', $pay_id, $_SESSION['user_id'] ?? null);
         } elseif ($payment_method === 'bank') {
-            recordBankInflow($pdo, $sale_date, $down_payment, 'Down payment (bank) - ' . $invoice_no, 'payment', $pay_id, $_SESSION['user_id'] ?? null);
+            recordBankInflow($pdo, $sale_date, $down_payment, 'Down payment (bank) - ' . $invoice_no, 'payment', $pay_id, $_SESSION['user_id'] ?? null, $bank_account_id);
         }
     }
 
@@ -285,6 +287,19 @@ require_once '../../includes/header.php';
               </div>
             </div>
           </div>
+          <div class="row" id="bankAccountRow" style="display:none;">
+            <div class="col-12">
+              <div class="form-group mb-2">
+                <label class="small text-muted">Bank Account</label>
+                <select name="bank_account_id" class="form-control">
+                  <option value="">Select Account</option>
+                  <?php foreach ($bank_accounts as $ba): ?>
+                    <option value="<?= $ba['id'] ?>"><?= htmlspecialchars($ba['bank_name'] . ' - ' . $ba['account_name']) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+            </div>
+          </div>
 
           <div class="row">
             <div class="col-6">
@@ -414,6 +429,10 @@ $(document).ready(function() {
     $('#downPayment').on('input', calcInstallment);
     $('#planSelect').on('change', calcInstallment);
     $('#manualMonths').on('input', calcInstallment);
+
+    $('#paymentMethod').on('change', function() {
+      $('#bankAccountRow').toggle($(this).val() === 'bank');
+    });
 
     function addToCart() {
         var desc = $('#entryDesc').val().trim();

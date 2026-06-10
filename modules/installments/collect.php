@@ -4,6 +4,8 @@ $page_title = 'Collect Payment';
 $base_url = '../../';
 require_once '../../includes/functions.php';
 
+$bank_accounts = getAll('bank_accounts', 'bank_name ASC, account_name ASC');
+
 $installment_id = (int)($_GET['installment_id'] ?? 0);
 $sale_id = (int)($_GET['sale_id'] ?? 0);
 
@@ -39,6 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $payment_date = $_POST['payment_date'] ?? date('Y-m-d');
     $reference_no = $_POST['reference_no'] ?? '';
     $notes = $_POST['notes'] ?? '';
+    $bank_account_id = (int)($_POST['bank_account_id'] ?? 0);
 
     if ($pay_amount <= 0) {
         $_SESSION['error'] = 'Amount must be greater than 0.';
@@ -79,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($payment_method === 'cash') {
             recordCashInflow($pdo, $payment_date, $pay_amount, 'Installment - Sale #' . $inst['sale_id'], 'payment', $payment_id, $_SESSION['user_id'] ?? null);
         } elseif ($payment_method === 'bank') {
-            recordBankInflow($pdo, $payment_date, $pay_amount, 'Installment (bank) - Sale #' . $inst['sale_id'], 'payment', $payment_id, $_SESSION['user_id'] ?? null);
+            recordBankInflow($pdo, $payment_date, $pay_amount, 'Installment (bank) - Sale #' . $inst['sale_id'], 'payment', $payment_id, $_SESSION['user_id'] ?? null, $bank_account_id);
         }
 
         $msg = "Payment of " . formatCurrency($pay_amount) . " recorded for installment #{$inst['installment_no']}.";
@@ -146,9 +149,20 @@ require_once '../../includes/header.php';
             </div>
             <div class="col-md-4 form-group">
               <label class="form-label">Method</label>
-              <select name="payment_method" class="form-control">
+              <select name="payment_method" class="form-control payment-method-select">
                 <option value="cash">Cash</option>
                 <option value="bank">Bank</option>
+              </select>
+            </div>
+          </div>
+          <div class="row bank-account-row" style="display:none;">
+            <div class="col-md-12 form-group">
+              <label class="form-label">Bank Account</label>
+              <select name="bank_account_id" class="form-control">
+                <option value="">Select Account</option>
+                <?php foreach ($bank_accounts as $ba): ?>
+                  <option value="<?= $ba['id'] ?>"><?= htmlspecialchars($ba['bank_name'] . ' - ' . $ba['account_name']) ?></option>
+                <?php endforeach; ?>
               </select>
             </div>
           </div>
@@ -204,4 +218,9 @@ require_once '../../includes/header.php';
   </div>
 </div>
 
+<script>
+$(document).on('change', '.payment-method-select', function() {
+    $(this).closest('form').find('.bank-account-row').toggle($(this).val() === 'bank');
+});
+</script>
 <?php require_once '../../includes/footer.php'; ?>

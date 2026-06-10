@@ -132,10 +132,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Fetch recent purchases with product info
 $recent = $pdo->query("
-    SELECT p.*, s.name AS supplier_name,
+    SELECT p.*, s.name AS supplier_name, s.contact_person AS supplier_contact,
         GROUP_CONCAT(DISTINCT pr.name SEPARATOR ', ') AS product_names,
         GROUP_CONCAT(DISTINCT pi.quantity SEPARATOR ', ') AS product_qtys,
-        (SELECT COUNT(*) FROM purchase_items pi WHERE pi.purchase_id = p.id) AS item_count
+        (SELECT COALESCE(SUM(quantity), 0) FROM purchase_items pi WHERE pi.purchase_id = p.id) AS item_count
     FROM purchases p
     LEFT JOIN suppliers s ON p.supplier_id = s.id
     LEFT JOIN purchase_items pi ON pi.purchase_id = p.id
@@ -182,7 +182,7 @@ require_once '../../includes/header.php';
           <?php else: foreach ($recent as $r): ?>
             <tr>
               <td><?=formatDate($r['purchase_date'])?></td>
-              <td><?=htmlspecialchars($r['supplier_name']??'-')?></td>
+              <td><?php if ($r['supplier_name']): $_contact = $r['supplier_contact'] ?? ''; echo htmlspecialchars($_contact ? "$_contact ({$r['supplier_name']})" : $r['supplier_name']); else: echo '-'; endif; ?></td>
               <td><?=htmlspecialchars($r['invoice_no']??'-')?></td>
               <td><?=htmlspecialchars($r['product_names']??'-')?></td>
               <td class="text-right"><?=$r['item_count']?></td>
@@ -218,7 +218,7 @@ require_once '../../includes/header.php';
           <select name="supplier_id" class="form-control">
             <option value="">Select Supplier</option>
             <?php foreach ($suppliers as $s): ?>
-              <option value="<?=$s['id']?>"><?=htmlspecialchars($s['name'])?></option>
+              <option value="<?=$s['id']?>"><?=htmlspecialchars(($s['contact_person'] ? $s['contact_person'] . ' (' . $s['name'] . ')' : $s['name']))?></option>
             <?php endforeach; ?>
           </select>
         </div>
@@ -394,7 +394,7 @@ require_once '../../includes/header.php';
           <?php else: foreach ($recent as $r): ?>
             <tr>
               <td><?=formatDate($r['purchase_date'])?></td>
-              <td><?=htmlspecialchars($r['supplier_name']??'-')?></td>
+              <td><?php if ($r['supplier_name']): $_contact = $r['supplier_contact'] ?? ''; echo htmlspecialchars($_contact ? "$_contact ({$r['supplier_name']})" : $r['supplier_name']); else: echo '-'; endif; ?></td>
               <td><?=htmlspecialchars($r['invoice_no']??'-')?></td>
               <td><?=htmlspecialchars($r['product_names']??'-')?></td>
               <td class="text-right"><?=$r['item_count']?></td>
@@ -575,7 +575,8 @@ function viewPurchase(btn) {
             // Header info
             html += '<div class="row mb-3">';
             html += '<div class="col-md-3"><small class="text-muted">Date</small><p class="font-weight-bold mb-0">' + d.purchase_date + '</p></div>';
-            html += '<div class="col-md-3"><small class="text-muted">Supplier</small><p class="font-weight-bold mb-0">' + escapeHtml(d.supplier_name) + '</p></div>';
+            var supName = d.supplier_name; var supContact = d.supplier_contact || ''; var supDisplay = supContact ? supContact + ' (' + supName + ')' : supName;
+            html += '<div class="col-md-3"><small class="text-muted">Supplier</small><p class="font-weight-bold mb-0">' + escapeHtml(supDisplay) + '</p></div>';
             html += '<div class="col-md-3"><small class="text-muted">Invoice No.</small><p class="font-weight-bold mb-0">' + escapeHtml(d.invoice_no || '-') + '</p></div>';
             html += '<div class="col-md-3"><small class="text-muted">Status</small><p class="mb-0"><span class="badge badge-' + badge + '">' + d.status.charAt(0).toUpperCase() + d.status.slice(1) + '</span></p></div>';
             html += '</div>';

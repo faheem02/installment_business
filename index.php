@@ -107,7 +107,7 @@ require_once 'includes/header.php';
     <div class="card shadow mb-4">
       <div class="card-header py-3 d-flex justify-content-between align-items-center">
         <h6 class="m-0 font-weight-bold text-danger"><i class="fas fa-exclamation-circle"></i> Overdue Installments</h6>
-        <a href="modules/installments/schedules.php?status=overdue" class="btn btn-danger btn-sm">View All</a>
+        <a href="modules/installments/late_payments.php" class="btn btn-danger btn-sm">View All</a>
       </div>
       <div class="card-body">
         <?php if (count($overdues)): ?>
