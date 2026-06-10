@@ -171,6 +171,15 @@ $payments = $pdo->prepare("SELECT p.*, u.username AS added_by FROM payments p LE
 $payments->execute([$id]);
 $payments_data = $payments->fetchAll();
 
+// Build sale_id → products map for ledger
+$sale_products_map = [];
+$sale_ids = array_unique(array_filter(array_column($payments_data, 'sale_id')));
+if (!empty($sale_ids)) {
+    $ids = implode(',', array_map('intval', $sale_ids));
+    $prod_rows = $pdo->query("SELECT si.sale_id, GROUP_CONCAT(DISTINCT COALESCE(p.name, si.item_description) SEPARATOR ', ') AS products FROM sale_items si LEFT JOIN products p ON si.product_id = p.id WHERE si.sale_id IN ($ids) GROUP BY si.sale_id")->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($prod_rows as $row) { $sale_products_map[$row['sale_id']] = $row['products']; }
+}
+
 $returns = $pdo->prepare("SELECT sr.*, s.invoice_no, u.username AS added_by FROM sale_returns sr LEFT JOIN sales s ON s.id = sr.sale_id LEFT JOIN users u ON u.id = sr.created_by WHERE sr.customer_id = ? ORDER BY sr.return_date DESC LIMIT 50");
 $returns->execute([$id]);
 $returns_data = $returns->fetchAll();
@@ -180,7 +189,7 @@ $opening_due = (float)$customer['opening_due'];
 $opening_paid = (float)$customer['opening_paid'];
 $credit_sale = 0;
 foreach ($sales_data as $s) {
-    if ($s['status'] !== 'cancelled') $credit_sale += (float)$s['total_amount'];
+    if ($s['status'] !== 'cancelled') $credit_sale += (float)$s['total_amount'] + (float)$s['interest_amount'];
 }
 $payments_total = array_sum(array_column($payments_data, 'amount'));
 $returns_total = array_sum(array_column($returns_data, 'amount'));
@@ -242,27 +251,43 @@ foreach ($installments_data as $inst) {
     else $pending_installments_count++;
 }
 
-// Total products purchased across all sales
+// Total products purchased across all sales (including free-text items)
 $all_items = $pdo->prepare("
-    SELECT SUM(si.quantity) as total_qty, COUNT(DISTINCT si.product_id) as distinct_products
-    FROM sale_items si
-    WHERE si.product_id IS NOT NULL AND si.sale_id IN (SELECT s2.id FROM (SELECT id FROM sales WHERE customer_id = ?) s2)
+    SELECT SUM(si.quantity) as total_qty FROM sale_items si
+    WHERE si.sale_id IN (SELECT s2.id FROM (SELECT id FROM sales WHERE customer_id = ?) s2)
 ");
 $all_items->execute([$id]);
 $all_items_data = $all_items->fetch();
 $total_products_qty = (int)($all_items_data['total_qty'] ?? 0);
-$total_distinct_products = (int)($all_items_data['distinct_products'] ?? 0);
-
-// Products purchased list with names
-$products_purchased = $pdo->prepare("
-    SELECT p.name, p.code, p.product_type, SUM(si.quantity) AS qty
-    FROM sale_items si
-    JOIN products p ON si.product_id = p.id
-    WHERE si.sale_id IN (SELECT id FROM sales WHERE customer_id = ?)
-    GROUP BY si.product_id
-    ORDER BY qty DESC
+$distinct_stmt = $pdo->prepare("
+    SELECT COUNT(*) FROM (
+        SELECT si.product_id FROM sale_items si WHERE si.product_id IS NOT NULL
+        AND si.sale_id IN (SELECT s2.id FROM (SELECT id FROM sales WHERE customer_id = ?) s2)
+        UNION
+        SELECT si.item_description FROM sale_items si WHERE si.product_id IS NULL AND si.item_description IS NOT NULL AND si.item_description != ''
+        AND si.sale_id IN (SELECT s2.id FROM (SELECT id FROM sales WHERE customer_id = ?) s2)
+    ) d
 ");
-$products_purchased->execute([$id]);
+$distinct_stmt->execute([$id, $id]);
+$total_distinct_products = (int)$distinct_stmt->fetchColumn();
+
+// Products purchased list with names (including free-text items)
+$products_purchased = $pdo->prepare("
+    SELECT name, code, product_type, qty FROM (
+        SELECT p.name, p.code, p.product_type, SUM(si.quantity) AS qty, 0 AS sort
+        FROM sale_items si
+        JOIN products p ON si.product_id = p.id
+        WHERE si.sale_id IN (SELECT id FROM sales WHERE customer_id = ?)
+        GROUP BY si.product_id
+        UNION ALL
+        SELECT si.item_description AS name, '' AS code, 'general' AS product_type, SUM(si.quantity) AS qty, 1 AS sort
+        FROM sale_items si
+        WHERE si.product_id IS NULL AND si.item_description IS NOT NULL AND si.item_description != ''
+        AND si.sale_id IN (SELECT id FROM sales WHERE customer_id = ?)
+        GROUP BY si.item_description
+    ) combined ORDER BY qty DESC
+");
+$products_purchased->execute([$id, $id]);
 $products_purchased = $products_purchased->fetchAll();
 
 // Build customer ledger (unified running balance)
@@ -270,23 +295,27 @@ $customer_ledger = [];
 $net_opening = $opening_due - $opening_paid;
 foreach ($sales_data as $s) {
     if ($s['status'] === 'cancelled') continue;
+    $total_with_interest = (float)$s['total_amount'] + (float)$s['interest_amount'];
     $customer_ledger[] = [
         'date' => $s['sale_date'],
         'type' => 'sale',
         'ref' => $s['invoice_no'] ?? '#' . $s['id'],
-        'debit' => (float)$s['total_amount'],
+        'debit' => $total_with_interest,
         'credit' => 0,
-        'desc' => 'Credit sale',
+        'desc' => 'Credit sale' . ((float)$s['interest_amount'] > 0 ? ' (incl. ' . formatCurrency($s['interest_amount']) . ' interest)' : ''),
     ];
 }
 foreach ($payments_data as $p) {
+    $products = $sale_products_map[$p['sale_id']] ?? '';
+    $desc = 'Installment payment' . ($products ? ' - ' . $products : '');
+    if ($p['notes']) $desc .= ' (' . $p['notes'] . ')';
     $customer_ledger[] = [
         'date' => $p['payment_date'],
         'type' => 'payment',
         'ref' => '#' . $p['id'],
         'debit' => 0,
         'credit' => (float)$p['amount'],
-        'desc' => $p['notes'] ?? 'Installment payment',
+        'desc' => $desc,
     ];
 }
 foreach ($returns_data as $r) {
@@ -439,8 +468,11 @@ require_once '../../includes/header.php';
               <thead class="thead-light">
                 <tr>
                   <th>Invoice</th>
+                  <th>Products</th>
                   <th class="text-nowrap">Date</th>
                   <th class="text-right">Amount</th>
+                  <th class="text-right">Interest</th>
+                  <th class="text-right">Total Payable</th>
                   <th class="text-right">Financed</th>
                   <th class="text-center">Months</th>
                   <th class="text-center">Paid</th>
@@ -458,11 +490,19 @@ require_once '../../includes/header.php';
                       if ($inst['status'] === 'paid') $s_paid++;
                   }
                   $s_pct = $s_total > 0 ? round($s_paid / $s_total * 100) : 0;
+                  $total_payable = (float)$s['financed_amount'] + (float)$s['interest_amount'];
+                  $plan_products = $sale_items_map[$sid] ?? [];
+                  $product_names = array_map(function($it) {
+                      return htmlspecialchars($it['name'] ?? $it['item_description'] ?? 'Item');
+                  }, $plan_products);
                 ?>
                   <tr>
                     <td><span class="badge badge-secondary"><?= htmlspecialchars($s['invoice_no']) ?></span></td>
+                    <td class="small"><?= !empty($product_names) ? implode('<br>', $product_names) : '-' ?></td>
                     <td class="text-nowrap"><?= formatDate($s['sale_date']) ?></td>
                     <td class="text-right font-weight-bold"><?= formatCurrency($s['total_amount']) ?></td>
+                    <td class="text-right"><?= (float)$s['interest_amount'] > 0 ? formatCurrency($s['interest_amount']) . '<br><small class="text-muted">(' . htmlspecialchars($s['interest_rate']) . '%)</small>' : '-' ?></td>
+                    <td class="text-right font-weight-bold"><?= formatCurrency($total_payable) ?></td>
                     <td class="text-right"><?= formatCurrency($s['financed_amount']) ?></td>
                     <td class="text-center"><?= $s['total_installments'] ?></td>
                     <td class="text-center"><?= $s_paid ?>/<?= $s_total ?></td>
@@ -1014,6 +1054,7 @@ $(document).ready(function() {
   <div class="card-header py-3 d-flex justify-content-between align-items-center">
     <h6 class="m-0 font-weight-bold text-info"><i class="fas fa-balance-scale"></i> Customer Ledger</h6>
     <div>
+      <a href="ledger_print.php?id=<?= $id ?>" target="_blank" class="btn btn-sm btn-danger mr-2"><i class="fas fa-file-pdf"></i> PDF</a>
       <span class="badge badge-primary status-badge mr-2">Opening: <?= formatCurrency($net_opening) ?></span>
       <span class="badge badge-success status-badge mr-2">Closing: <?= formatCurrency($closing) ?></span>
     </div>
@@ -1025,20 +1066,22 @@ $(document).ready(function() {
       <div class="table-responsive">
         <table class="table table-bordered table-hover table-sm">
           <thead class="thead-light">
-            <tr>
+          <tr class="table-secondary">
+              <td colspan="5" class="text-right font-weight-bold">Opening Balance</td>
+              <td class="text-right font-weight-bold"><?= formatCurrency($net_opening) ?></td>
+            </tr>  
+          
+          <tr>
               <th>Date</th>
               <th>Ref</th>
               <th>Description</th>
-              <th class="text-right">Debit (Sale)</th>
-              <th class="text-right">Credit (Payment/Return)</th>
+              <th class="text-right">Credit</th>
+              <th class="text-right">Debit </th>
               <th class="text-right">Balance</th>
             </tr>
           </thead>
           <tbody>
-            <tr class="table-secondary">
-              <td colspan="5" class="text-right font-weight-bold">Opening Balance</td>
-              <td class="text-right font-weight-bold"><?= formatCurrency($net_opening) ?></td>
-            </tr>
+            
             <?php $bal = $net_opening; $total_debit = 0; $total_credit = 0; foreach ($customer_ledger as $l):
               $bal += $l['debit'] - $l['credit'];
               $total_debit += $l['debit'];

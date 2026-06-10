@@ -130,20 +130,6 @@
       </div>
     </div>
 
-    <!-- Payments -->
-    <div class="nav-item">
-      <a class="nav-link" data-toggle="collapse" href="#collapsePayment" role="button" aria-expanded="false">
-        <i class="fas fa-fw fa-wallet"></i>
-        <span>Payment Collection</span>
-        <span class="arrow"><i class="fas fa-chevron-right"></i></span>
-      </a>
-      <div class="collapse" id="collapsePayment">
-        <div class="collapse-inner">
-          <a class="collapse-item <?= str_contains($_SERVER['PHP_SELF'],'daily') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/payments/daily.php"><i class="fas fa-coins"></i> Daily Collection</a>
-        </div>
-      </div>
-    </div>
-
     <hr class="sidebar-divider">
 
     <div class="sidebar-heading"><span>Finance</span></div>
@@ -232,8 +218,7 @@
             <span class="ml-1 d-none d-sm-inline"><?= $_SESSION['user_name'] ?? 'Admin' ?></span>
           </button>
           <div class="dropdown-menu dropdown-menu-right">
-            <a class="dropdown-item" href="#"><i class="fas fa-user fa-sm mr-2 text-muted"></i> Profile</a>
-            <a class="dropdown-item" href="#"><i class="fas fa-cogs fa-sm mr-2 text-muted"></i> Settings</a>
+            
             <div class="dropdown-divider"></div>
             <a class="dropdown-item" href="<?= $base_url ?? '' ?>login.php?logout=1">
               <i class="fas fa-sign-out-alt fa-sm mr-2 text-danger"></i> Logout

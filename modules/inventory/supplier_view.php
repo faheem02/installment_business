@@ -9,6 +9,7 @@ $supplier = getById('suppliers', $id);
 if (!$supplier) redirect('suppliers.php', 'Supplier not found', 'error');
 
 $users = $pdo->query("SELECT id, username FROM users ORDER BY username")->fetchAll();
+$bank_accounts = getAll('bank_accounts', 'bank_name ASC, account_name ASC');
 
 // Handle Overview financial update
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_financials'])) {
@@ -31,16 +32,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_payment'])) {
     $amount = (float)($_POST['amount'] ?? 0);
     $method = $_POST['payment_method'] ?? 'cash';
     $desc = trim($_POST['description'] ?? '');
+    $bank_account_id = (int)($_POST['bank_account_id'] ?? 0);
     if ($amount > 0) {
-        insert('supplier_payments', [
+        $user_id = (int)($_POST['created_by'] ?? $_SESSION['user_id'] ?? 1);
+        $payment_id = insert('supplier_payments', [
             'supplier_id' => $id,
             'amount' => $amount,
             'payment_method' => $method,
+            'bank_account_id' => $bank_account_id ?: null,
             'description' => $desc ?: null,
             'payment_date' => $pay_date,
-            'created_by' => (int)($_POST['created_by'] ?? $_SESSION['user_id'] ?? 1),
+            'created_by' => $user_id,
             'created_at' => date('Y-m-d'),
         ]);
+        $ref_desc = 'Supplier payment - ' . htmlspecialchars($supplier['contact_person'] ?? 'Supplier #' . $id);
+        if ($method === 'cash') {
+            recordCashOutflow($pdo, $pay_date, $amount, $ref_desc, 'supplier_payment', $payment_id, $user_id);
+        } elseif ($method === 'bank') {
+            recordBankOutflow($pdo, $pay_date, $amount, $ref_desc, 'supplier_payment', $payment_id, $user_id, $bank_account_id);
+        }
         $_SESSION['success'] = 'Payment recorded';
     } else {
         $_SESSION['error'] = 'Amount must be greater than 0';
@@ -88,16 +98,28 @@ $purchase_items = $pdo->prepare("
 $purchase_items->execute([$id]);
 $purchase_items_data = $purchase_items->fetchAll();
 
+// Build product name lookup per purchase
+$purchase_products = [];
+foreach ($purchase_items_data as $pi) {
+    $pid = $pi['purchase_id'];
+    $pname = $pi['product_name'] ?? $pi['product_code'] ?? 'Item';
+    if (!isset($purchase_products[$pid])) $purchase_products[$pid] = [];
+    if (!in_array($pname, $purchase_products[$pid])) $purchase_products[$pid][] = $pname;
+}
+
 // Build unified ledger (purchases as debit, payments as credit)
 $ledger = [];
 foreach ($purchases_data as $p) {
+    $products = $purchase_products[$p['id']] ?? [];
+    $desc = !empty($products) ? implode(', ', array_slice($products, 0, 3)) : 'Products supplied';
+    if (count($products) > 3) $desc .= ' +' . (count($products) - 3) . ' more';
     $ledger[] = [
         'date' => $p['purchase_date'],
         'type' => 'purchase',
         'ref' => $p['invoice_no'] ?? '#' . $p['id'],
         'debit' => (float)$p['total_amount'],
         'credit' => 0,
-        'desc' => 'Products supplied',
+        'desc' => $desc,
         'status' => $p['status'],
         'id' => $p['id'],
     ];
@@ -228,17 +250,17 @@ require_once '../../includes/header.php';
                 <label class="small text-muted">Opening Balance</label>
                 <input type="number" name="opening_balance" class="form-control form-control-sm" step="0.01" value="<?= $supplier['opening_balance'] ?>">
               </div>
-              <div class="form-group col-md-4 mb-2">
+              <!-- <div class="form-group col-md-4 mb-2">
                 <label class="small text-muted">Adjustment Type</label>
                 <select name="adjustment_type" class="form-control form-control-sm">
-                  <option value="plus" <?=$adj_type==='plus'?'selected':''?>>Plus (+)</option>
-                  <option value="minus" <?=$adj_type==='minus'?'selected':''?>>Minus (-)</option>
+                  <option value="plus" =$adj_type==='plus'?'selected':''?>>Plus (+)</option>
+                  <option value="minus" ?=$adj_type==='minus'?'selected':''?>>Minus (-)</option>
                 </select>
-              </div>
-              <div class="form-group col-md-4 mb-2">
+              </div> -->
+              <!-- <div class="form-group col-md-4 mb-2">
                 <label class="small text-muted">Adjustment Amount</label>
                 <input type="number" name="adjustment_amount" class="form-control form-control-sm" step="0.01" value="<?=$adj_abs?>" min="0">
-              </div>
+              </div> -->
             </div>
             <button type="submit" name="update_financials" class="btn btn-primary btn-sm"><i class="fas fa-save"></i> Update</button>
             <button type="button" class="btn btn-secondary btn-sm" onclick="$('#editFinancials').addClass('d-none')">Cancel</button>
@@ -374,9 +396,18 @@ require_once '../../includes/header.php';
           </div>
           <div class="form-group">
             <label class="small">Payment Method</label>
-            <select name="payment_method" class="form-control">
+            <select name="payment_method" class="form-control" onchange="$(this).closest('form').find('.bank-account-row').toggle($(this).val() === 'bank')">
               <option value="cash">Cash</option>
               <option value="bank">Bank</option>
+            </select>
+          </div>
+          <div class="form-group bank-account-row" style="display:none;">
+            <label class="small">Bank Account</label>
+            <select name="bank_account_id" class="form-control">
+              <option value="">Select Account</option>
+              <?php foreach ($bank_accounts as $ba): ?>
+                <option value="<?= $ba['id'] ?>"><?= htmlspecialchars($ba['bank_name'] . ' - ' . $ba['account_name']) ?></option>
+              <?php endforeach; ?>
             </select>
           </div>
           <div class="form-group">
@@ -483,44 +514,60 @@ require_once '../../includes/header.php';
 
 <?php elseif ($tab === 'ledger'): ?>
 <div class="card shadow mb-4">
-  <div class="card-header py-3 d-flex justify-content-between align-items-center">
+  <div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap">
     <h6 class="m-0 font-weight-bold text-info"><i class="fas fa-balance-scale"></i> Supplier Ledger</h6>
     <div>
+      <a href="supplier_ledger_print.php?id=<?= $id ?>" target="_blank" class="btn btn-sm btn-danger mr-2"><i class="fas fa-file-pdf"></i> PDF</a>
       <span class="badge badge-primary status-badge mr-2">Opening: <?= formatCurrency($opening + $adjustment) ?></span>
       <span class="badge badge-success status-badge">Closing: <?= formatCurrency($closing) ?></span>
     </div>
   </div>
   <div class="card-body">
+    <div class="row mb-3">
+      <div class="col-md-6">
+        <input type="text" id="ledgerSearch" class="form-control" placeholder="Search by date, ref, description, product...">
+      </div>
+    </div>
     <?php if (empty($ledger)): ?>
       <p class="text-muted mb-0 text-center py-3">No transactions found for this supplier.</p>
     <?php else: ?>
       <div class="table-responsive">
-        <table class="table table-bordered table-hover table-sm">
+        <table class="table table-bordered table-hover table-sm" id="ledgerTable">
           <thead class="thead-light">
-            <tr>
+          <tr class="table-secondary">
+              <td colspan="6" class="text-right font-weight-bold">Opening Balance</td>
+              <td class="text-right font-weight-bold"><?= formatCurrency($opening + $adjustment) ?></td>
+            </tr>  
+          <tr>
               <th>Date</th>
               <th>Ref</th>
               <th>Description</th>
-              <th class="text-right">Debit (Supplied)</th>
-              <th class="text-right">Credit (Paid)</th>
+              <th class="text-right">Credit</th>
+              <th class="text-right">Debit</th>
               <th class="text-right">Balance</th>
+              <th class="text-center">Action</th>
             </tr>
           </thead>
           <tbody>
-            <tr class="table-secondary">
-              <td colspan="5" class="text-right font-weight-bold">Opening Balance (incl. Adjustment)</td>
-              <td class="text-right font-weight-bold"><?= formatCurrency($opening + $adjustment) ?></td>
-            </tr>
+            
+            <tr style="display:none;" class="no-results"><td colspan="7" class="text-center text-muted py-2">No matching records</td></tr>
             <?php $bal = $opening + $adjustment; foreach ($ledger as $l):
               $bal += $l['debit'] - $l['credit'];
             ?>
-              <tr class="<?= $l['type'] === 'payment' ? 'table-success' : '' ?>">
+              <tr class="ledger-row <?= $l['type'] === 'payment' ? 'table-success' : '' ?>">
                 <td class="text-nowrap"><?= formatDate($l['date']) ?></td>
                 <td><span class="badge badge-<?= $l['type'] === 'purchase' ? 'primary' : 'success' ?>"><?= htmlspecialchars($l['ref']) ?></span></td>
                 <td class="small"><?= htmlspecialchars($l['desc']) ?></td>
-                <td class="text-right"><?= $l['debit'] ? formatCurrency($l['debit']) : '-' ?></td>
                 <td class="text-right"><?= $l['credit'] ? formatCurrency($l['credit']) : '-' ?></td>
+                <td class="text-right"><?= $l['debit'] ? formatCurrency($l['debit']) : '-' ?></td>
                 <td class="text-right font-weight-bold"><?= formatCurrency($bal) ?></td>
+                <td class="text-center">
+                  <?php if ($l['type'] === 'purchase'): ?>
+                    <a href="javascript:void(0)" onclick="window.open('purchase_print.php?id=<?= $l['id'] ?>','popup','width=900,height=600')" class="btn btn-sm btn-info" title="Print"><i class="fas fa-print"></i></a>
+                  <?php else: ?>
+                    <a href="javascript:void(0)" onclick="window.open('supplier_payment_receipt.php?payment_id=<?= $l['id'] ?>&supplier_id=<?= $id ?>','popup','width=900,height=600')" class="btn btn-sm btn-info" title="Print"><i class="fas fa-print"></i></a>
+                  <?php endif; ?>
+                </td>
               </tr>
             <?php endforeach; ?>
           </tbody>
@@ -530,6 +577,7 @@ require_once '../../includes/header.php';
               <td class="text-right"><?= formatCurrency($ledger_debit_total) ?></td>
               <td class="text-right"><?= formatCurrency($ledger_credit_total) ?></td>
               <td class="text-right"><?= formatCurrency($closing) ?></td>
+              <td></td>
             </tr>
           </tfoot>
         </table>
@@ -537,6 +585,22 @@ require_once '../../includes/header.php';
     <?php endif; ?>
   </div>
 </div>
+
+<script>
+$(document).ready(function() {
+  $('#ledgerSearch').on('keyup', function() {
+    var val = $(this).val().toLowerCase();
+    var visible = 0;
+    $('#ledgerTable tbody tr.ledger-row').each(function() {
+      var text = $(this).text().toLowerCase();
+      var match = text.indexOf(val) > -1;
+      $(this).toggle(match);
+      if (match) visible++;
+    });
+    $('.no-results').toggle(visible === 0);
+  });
+});
+</script>
 
 <?php endif; ?>
 

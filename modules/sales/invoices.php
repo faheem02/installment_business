@@ -65,6 +65,8 @@ require_once '../../includes/header.php';
             <th>Customer</th>
             <th>Date</th>
             <th>Total</th>
+            <th>Interest</th>
+            <th>Total with Interest</th>
             <th>Total Paid</th>
             <th>Remaining</th>
             <th>Method</th>
@@ -74,7 +76,7 @@ require_once '../../includes/header.php';
         </thead>
         <tbody>
           <?php if (empty($sales)): ?>
-            <tr><td colspan="9" class="text-center text-muted">No invoices found</td></tr>
+            <tr><td colspan="11" class="text-center text-muted">No invoices found</td></tr>
           <?php else: ?>
             <?php foreach ($sales as $s): ?>
               <tr>
@@ -82,8 +84,10 @@ require_once '../../includes/header.php';
                 <td><?= htmlspecialchars($s['customer_name']) ?><br><small class="text-muted"><?= htmlspecialchars($s['customer_phone']) ?></small></td>
                 <td><?= formatDate($s['sale_date']) ?></td>
                 <td class="text-right"><?= formatCurrency($s['total_amount']) ?></td>
+                <td class="text-right"><?= (float)$s['interest_amount'] > 0 ? formatCurrency($s['interest_amount']) : '-' ?></td>
+                <td class="text-right font-weight-bold"><?= formatCurrency((float)$s['total_amount'] + (float)$s['interest_amount']) ?></td>
                 <td class="text-right"><?php $total_paid = (float)$s['down_payment'] + (float)$s['total_inst_paid']; ?><?= formatCurrency($total_paid) ?></td>
-                <td class="text-right"><?php $remaining = (float)$s['total_amount'] - $total_paid; ?><span class="<?= $remaining > 0 ? 'text-danger font-weight-bold' : '' ?>"><?= formatCurrency($remaining) ?></span></td>
+                <td class="text-right"><?php $remaining = (float)$s['total_amount'] + (float)$s['interest_amount'] - $total_paid; ?><span class="<?= $remaining > 0 ? 'text-danger font-weight-bold' : '' ?>"><?= formatCurrency($remaining) ?></span></td>
                 <td><?= ucfirst(str_replace('_', ' ', $s['payment_method'])) ?></td>
                 <td>
                   <?php

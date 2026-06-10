@@ -6,6 +6,7 @@ require_once '../../includes/functions.php';
 
 $stmt = $pdo->prepare("
     SELECT p.*, s.invoice_no, s.sale_date, s.total_amount, s.down_payment, s.financed_amount,
+           s.interest_rate, s.interest_amount,
            s.total_installments, s.payment_status AS sale_status,
            c.full_name AS customer_name, c.phone AS customer_phone, c.address AS customer_address,
            c.cnic AS customer_cnic,
@@ -133,6 +134,11 @@ $title = 'Receipt ' . $receipt_no;
     <?php if ($payment['sale_id']): ?>
       <tr><td>Total Sale Amount</td><td><?= formatCurrency($payment['total_amount']) ?></td></tr>
       <tr><td>Financed Amount</td><td><?= formatCurrency($payment['financed_amount']) ?></td></tr>
+      <?php if ((float)$payment['interest_amount'] > 0): ?>
+        <tr><td>Interest Rate</td><td><?= htmlspecialchars($payment['interest_rate']) ?>%</td></tr>
+        <tr><td>Interest Amount</td><td class="text-danger"><?= formatCurrency($payment['interest_amount']) ?></td></tr>
+        <tr><td>Total Payable (Financed + Interest)</td><td class="font-weight-bold"><?= formatCurrency((float)$payment['financed_amount'] + (float)$payment['interest_amount']) ?></td></tr>
+      <?php endif; ?>
     <?php endif; ?>
     <?php if ($payment['notes']): ?>
       <tr><td>Notes</td><td><?= nl2br(htmlspecialchars($payment['notes'])) ?></td></tr>

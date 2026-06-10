@@ -29,8 +29,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_expense'])) {
         'expense_date' => $expense_date,
         'amount' => $amount,
         'description' => $_POST['description'] ?? '',
-        'vendor_name' => $_POST['vendor_name'] ?? '',
-        'bill_no' => $_POST['bill_no'] ?? '',
+        // 'vendor_name' => $_POST['vendor_name'] ?? '',
+        // 'bill_no' => $_POST['bill_no'] ?? '',
         'payment_method' => $payment_method,
         'bank_account_id' => $bank_account_id ?: null,
         'approval_status' => 'pending',
@@ -60,8 +60,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_expense'])) {
             'expense_date' => $_POST['expense_date'],
             'amount' => $amount,
             'description' => $_POST['description'] ?? '',
-            'vendor_name' => $_POST['vendor_name'] ?? '',
-            'bill_no' => $_POST['bill_no'] ?? '',
+            // 'vendor_name' => $_POST['vendor_name'] ?? '',
+            // 'bill_no' => $_POST['bill_no'] ?? '',
             'payment_method' => $payment_method,
             'bank_account_id' => $bank_account_id ?: null,
             'notes' => $_POST['notes'] ?? '',
@@ -236,8 +236,8 @@ require_once '../../includes/header.php';
               <th>Date</th>
               <th>Category</th>
               <th>Description</th>
-              <th>Vendor</th>
-              <th>Bill No</th>
+              <!-- <th>Vendor</th> -->
+              <!-- <th>Bill No</th> -->
               <th class="text-right">Amount</th>
               <th>Method</th>
               <th>Status</th>
@@ -255,8 +255,8 @@ require_once '../../includes/header.php';
                     <?= mb_strlen($e['description'] ?? '') > 40 ? '...' : '' ?>
                   </a>
                 </td>
-                <td><?= htmlspecialchars($e['vendor_name'] ?: '-') ?></td>
-                <td><?= htmlspecialchars($e['bill_no'] ?: '-') ?></td>
+               
+                <!-- <td>?= htmlspecialchars($e['bill_no'] ?: '-') ?></td> -->
                 <td class="text-right font-weight-bold text-danger"><?= formatCurrency($e['amount']) ?></td>
                 <td>
                   <span class="badge badge-<?= $e['payment_method'] === 'cash' ? 'success' : 'info' ?> status-badge"><?= ucfirst($e['payment_method']) ?></span>

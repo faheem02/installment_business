@@ -257,7 +257,7 @@ require_once '../../includes/header.php';
           </div>
           <div class="col-md-4 form-group">
             <label class="font-weight-bold small">Purchase Price</label>
-            <input type="number" class="form-control" id="bikePrice" step="0.01" required>
+            <input type="number" class="form-control" id="bikePrice" step="0.01" required oninput="document.getElementById('bikePriceHidden').value = this.value">
           </div>
           <div class="col-md-4 form-group">
             <label class="font-weight-bold small">Color</label>
@@ -303,7 +303,7 @@ require_once '../../includes/header.php';
           </div>
           <div class="col-md-4 form-group">
             <label class="font-weight-bold small">Purchase Price</label>
-            <input type="number" class="form-control" id="mobilePrice" step="0.01" required>
+            <input type="number" class="form-control" id="mobilePrice" step="0.01" required oninput="document.getElementById('mobilePriceHidden').value = this.value">
           </div>
           <div class="col-md-4 form-group">
             <label class="font-weight-bold small">Condition</label>
@@ -601,13 +601,37 @@ function viewPurchase(btn) {
 
             // Serials
             if (d.serials && d.serials.length > 0) {
-                html += '<h6 class="font-weight-bold" style="color:#0f172a;">Serials / IMEIs</h6>';
-                html += '<div class="table-responsive"><table class="table table-bordered table-sm"><thead class="thead-light"><tr><th>#</th><th>Serial / IMEI</th><th>Status</th></tr></thead><tbody>';
+                var firstType = d.serials[0].product_type || 'general';
+                html += '<h6 class="font-weight-bold" style="color:#0f172a;">Product Identifiers</h6>';
+                html += '<div class="table-responsive"><table class="table table-bordered table-sm"><thead class="thead-light"><tr>';
+                if (firstType === 'mobile') {
+                    html += '<th>#</th><th>IMEI Number</th>';
+                } else if (firstType === 'bike') {
+                    html += '<th>#</th><th>Engine No.</th><th>Chassis No.</th>';
+                } else {
+                    html += '<th>#</th><th>Serial / Identifier</th>';
+                }
+                html += '<th>Status</th></tr></thead><tbody>';
                 for (var j = 0; j < d.serials.length; j++) {
                     var sn = d.serials[j];
-                    var snVal = sn.serial_number || sn.imei_number || '-';
+                    var pt = sn.product_type || 'general';
                     var snBadge = sn.status === 'available' ? 'success' : (sn.status === 'sold' ? 'secondary' : 'warning');
-                    html += '<tr><td>' + (j + 1) + '</td><td>' + escapeHtml(snVal) + '</td><td><span class="badge badge-' + snBadge + '">' + sn.status + '</span></td></tr>';
+                    html += '<tr>';
+                    html += '<td>' + (j + 1) + '</td>';
+                    if (pt === 'mobile') {
+                        html += '<td>' + escapeHtml(sn.imei_number || '-') + '</td>';
+                    } else if (pt === 'bike') {
+                        var eng = sn.serial_number || '-';
+                        var cha = '';
+                        if (sn.notes && sn.notes.indexOf(' - ') > -1) {
+                            cha = sn.notes.substring(sn.notes.indexOf(' - ') + 3);
+                        }
+                        html += '<td>' + escapeHtml(eng) + '</td><td>' + escapeHtml(cha) + '</td>';
+                    } else {
+                        html += '<td>' + escapeHtml(sn.serial_number || sn.imei_number || '-') + '</td>';
+                    }
+                    html += '<td><span class="badge badge-' + snBadge + '">' + sn.status + '</span></td>';
+                    html += '</tr>';
                 }
                 html += '</tbody></table></div>';
             }

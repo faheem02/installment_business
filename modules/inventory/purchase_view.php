@@ -51,11 +51,19 @@ foreach ($items as $item) {
     ];
 }
 
+$prod_cache = [];
 foreach ($serials as $s) {
+    $pid = $s['product_id'];
+    if (!isset($prod_cache[$pid])) {
+        $p = getById('products', $pid);
+        $prod_cache[$pid] = $p ? $p['product_type'] : 'general';
+    }
     $data['serials'][] = [
         'serial_number' => $s['serial_number'],
         'imei_number' => $s['imei_number'],
         'status' => $s['status'],
+        'notes' => $s['notes'],
+        'product_type' => $prod_cache[$pid],
     ];
 }
 

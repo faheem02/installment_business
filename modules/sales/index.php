@@ -6,7 +6,7 @@ require_once '../../includes/functions.php';
 
 $customers = getAll('customers', 'full_name ASC');
 $plans = $pdo->query("SELECT * FROM installment_plans WHERE status = 1 ORDER BY name")->fetchAll();
-$all_products = $pdo->query("SELECT id, code, name, sale_price FROM products WHERE status = 1 ORDER BY name")->fetchAll();
+$all_products = $pdo->query("SELECT id, code, name, sale_price, stock_quantity FROM products WHERE status = 1 ORDER BY name")->fetchAll();
 $bank_accounts = getAll('bank_accounts', 'bank_name ASC, account_name ASC');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -27,6 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header("Location: index.php"); exit;
     }
 
+    $product_ids = $_POST['product_ids'] ?? [];
     $total_amount = 0;
     $items = [];
     foreach ($descriptions as $i => $desc) {
@@ -36,7 +37,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $price = (float)($prices[$i] ?? 0);
         $line_total = $qty * $price;
         $total_amount += $line_total;
-        $items[] = ['description' => $desc, 'quantity' => $qty, 'price' => $price, 'subtotal' => $line_total];
+        $pid = !empty($product_ids[$i]) ? (int)$product_ids[$i] : null;
+        $items[] = ['description' => $desc, 'quantity' => $qty, 'price' => $price, 'subtotal' => $line_total, 'product_id' => $pid];
     }
 
     if (empty($items)) {
@@ -48,12 +50,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $total_installments = 0;
     $monthly_installment = 0;
 
+    $interest_rate = 0;
+    $interest_amount = 0;
     if ($plan_id && $financed_amount > 0) {
         $plan = getById('installment_plans', $plan_id);
         if ($plan) {
             $total_installments = (int)$plan['duration_months'];
-            $interest = $financed_amount * ((float)$plan['interest_rate'] / 100);
-            $total_payable = $financed_amount + $interest;
+            $interest_rate = (float)$plan['interest_rate'];
+            $interest_amount = $financed_amount * ($interest_rate / 100);
+            $total_payable = $financed_amount + $interest_amount;
             $monthly_installment = $total_installments > 0 ? round($total_payable / $total_installments, 2) : 0;
         }
     } elseif ($manual_months > 0 && $financed_amount > 0) {
@@ -73,6 +78,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'total_amount' => $total_amount,
         'down_payment' => $down_payment,
         'financed_amount' => $financed_amount,
+        'interest_rate' => $interest_rate,
+        'interest_amount' => $interest_amount,
         'installment_plan_id' => $plan_id,
         'monthly_installment' => $monthly_installment,
         'total_installments' => $total_installments,
@@ -89,12 +96,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     foreach ($items as $item) {
         insert('sale_items', [
             'sale_id' => $sale_id,
-            'product_id' => null,
+            'product_id' => $item['product_id'],
             'item_description' => $item['description'],
             'quantity' => $item['quantity'],
             'price' => $item['price'],
             'subtotal' => $item['subtotal'],
         ]);
+        if ($item['product_id']) {
+            $pdo->prepare("UPDATE products SET stock_quantity = GREATEST(0, stock_quantity - ?) WHERE id = ?")->execute([$item['quantity'], $item['product_id']]);
+        }
     }
 
     if ($down_payment > 0) {
@@ -217,12 +227,14 @@ require_once '../../includes/header.php';
         <div class="form-group mb-2">
           <label class="small text-muted">Description <span class="text-danger">*</span></label>
           <input type="text" id="entryDesc" class="form-control form-control-lg" list="productList" placeholder="Type or select product..." autofocus>
+          <input type="hidden" id="entryProductId" value="0">
           <datalist id="productList">
             <option value="">-- Select Product --</option>
             <?php foreach ($all_products as $p): ?>
-            <option value="<?= htmlspecialchars($p['name'].' ('.$p['code'].')') ?>" data-price="<?= $p['sale_price'] ?>"><?= htmlspecialchars($p['name'].' - '.$p['code'])?></option>
+            <option value="<?= htmlspecialchars($p['name'].' ('.$p['code'].')') ?>" data-price="<?= $p['sale_price'] ?>" data-product-id="<?= $p['id'] ?>" data-stock="<?= (int)$p['stock_quantity'] ?>"><?= htmlspecialchars($p['name'].' - '.$p['code'])?></option>
             <?php endforeach; ?>
           </datalist>
+          <small class="text-muted" id="stockInfo" style="display:none;"></small>
         </div>
         <div class="row">
           <div class="col-6"><div class="form-group mb-2"><label class="small text-muted">Qty</label><input type="number" id="entryQty" class="form-control form-control-lg" value="1" min="1"></div></div>
@@ -333,7 +345,8 @@ require_once '../../includes/header.php';
 
           <!-- Plan breakdown -->
           <div id="planBreakdown" class="summary-card mt-2" style="display:none;">
-            <div class="d-flex justify-content-between small"><span class="text-muted">Interest</span><span class="font-weight-bold" id="interestDisplay">0.00</span></div>
+            <div class="d-flex justify-content-between small"><span class="text-muted">Interest Rate</span><span class="font-weight-bold" id="rateDisplay">0%</span></div>
+            <div class="d-flex justify-content-between small"><span class="text-muted">Interest Amount</span><span class="font-weight-bold" id="interestDisplay">0.00</span></div>
             <div class="d-flex justify-content-between small mt-1"><span class="text-muted">Total Payable (Financed + Interest)</span><span class="font-weight-bold" id="totalPayableDisplay">0.00</span></div>
             <hr class="my-1">
             <div class="d-flex justify-content-between align-items-center">
@@ -399,6 +412,7 @@ $(document).ready(function() {
             var totalPayable = financed + interest;
             var monthly = totalPayable / months;
             $('#planBreakdown').show();
+            $('#rateDisplay').text(rate > 0 ? rate + '%' : '0%');
             $('#interestDisplay').text(interest.toFixed(2));
             $('#totalPayableDisplay').text(totalPayable.toFixed(2));
             $('#monthlyDisplay').text(monthly.toFixed(2));
@@ -419,12 +433,26 @@ $(document).ready(function() {
         $('#productList option').each(function() {
             if ($(this).attr('value') && $(this).attr('value') === val) {
                 var price = $(this).data('price');
+                var productId = $(this).data('product-id');
+                var stock = $(this).data('stock');
                 if (price) { $('#entryPrice').val(price); updateEntryPreview(); }
+                $('#entryProductId').val(productId || 0);
+                if (stock !== undefined) {
+                    if (stock > 0) {
+                        $('#stockInfo').text('In Stock: ' + stock).removeClass('text-danger').addClass('text-muted').show();
+                    } else {
+                        $('#stockInfo').text('Out of Stock!').removeClass('text-muted').addClass('text-danger').show();
+                    }
+                }
                 matched = true;
                 return false;
             }
         });
-        if (!matched && !val) { $('#entryPrice').val(''); updateEntryPreview(); }
+        if (!matched) {
+            $('#entryProductId').val(0);
+            $('#stockInfo').hide();
+            if (!val) { $('#entryPrice').val(''); updateEntryPreview(); }
+        }
     });
     $('#downPayment').on('input', calcInstallment);
     $('#planSelect').on('change', calcInstallment);
@@ -441,16 +469,27 @@ $(document).ready(function() {
         var price = parseFloat($('#entryPrice').val()) || 0;
         if (price <= 0) { showMsg('Enter a valid price'); return; }
         var amount = qty * price;
+        var productId = parseInt($('#entryProductId').val()) || 0;
+        var stockWarn = '';
+        var stock = 0;
+        $('#productList option').each(function() {
+            if ($(this).data('product-id') == productId) {
+                stock = parseInt($(this).data('stock')) || 0;
+                if (qty > stock) stockWarn = ' <small class="text-danger">(only ' + stock + ' in stock)</small>';
+                return false;
+            }
+        });
 
         var safeDesc = $('<span>').text(desc).html();
         var html = '<tr class="item-row">' +
-            '<td><input type="hidden" name="item_description[]" value="' + safeDesc + '">' + safeDesc + '</td>' +
+            '<td><input type="hidden" name="item_description[]" value="' + safeDesc + '"><input type="hidden" name="product_ids[]" value="' + productId + '">' + safeDesc + stockWarn + '</td>' +
             '<td class="text-center p-1"><input type="number" name="quantity[]" class="form-control form-control-sm qty-input text-center" value="' + qty + '" min="1" style="width:48px;"></td>' +
             '<td class="text-right p-1"><input type="number" name="price[]" class="form-control form-control-sm price-input text-right" step="0.01" min="0" value="' + price.toFixed(2) + '" style="width:80px;"></td>' +
             '<td class="text-right font-weight-bold line-total align-middle p-1">' + amount.toFixed(2) + '</td>' +
             '<td class="text-center align-middle p-1"><span class="remove-item" style="cursor:pointer;color:#e74a3b;"><i class="fas fa-times"></i></span></td>' +
             '</tr>';
         $('#cartBody').append(html);
+        if (stockWarn) showMsg('Insufficient stock for ' + safeDesc);
         $('#emptyCart').hide();
         $('#summaryArea').show();
         $('#emptySummary').hide();
@@ -462,6 +501,8 @@ $(document).ready(function() {
         $('#entryDesc').val('').focus();
         $('#entryPrice').val('');
         $('#entryQty').val(1);
+        $('#entryProductId').val(0);
+        $('#stockInfo').hide();
         $('#entryPreview').hide();
     }
 

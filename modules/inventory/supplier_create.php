@@ -6,16 +6,12 @@ require_once '../../includes/functions.php';
 
 if ($_SERVER['REQUEST_METHOD']==='POST') {
     $opening_balance = (float)($_POST['opening_balance']??0);
-    $adjustment_amount = (float)($_POST['adjustment_amount']??0);
-    $adjustment_type = $_POST['adjustment_type'] ?? 'plus';
-    $adjustment = ($adjustment_type === 'minus' ? -1 : 1) * $adjustment_amount;
     insert('suppliers', [
         'contact_person'=>$_POST['name'],
         'name'=>$_POST['company_name']??'',
         'phone'=>$_POST['phone']??'',
         'email'=>$_POST['email']??'','address'=>$_POST['address']??'','city'=>$_POST['city']??'',
         'opening_balance'=>$opening_balance,
-        'adjustment'=>$adjustment,
         'status'=>isset($_POST['status'])?1:0,'created_at'=>date('Y-m-d'),'updated_at'=>date('Y-m-d')
     ]);
     redirect('suppliers.php', 'Supplier created');
@@ -44,10 +40,7 @@ require_once '../../includes/header.php';
           <p class="small text-muted">Supplier amounts are credit by default (we owe the supplier).</p>
           <div class="row">
             <div class="col-md-4 form-group"><label class="form-label">Opening Balance (Credit)</label><input type="number" name="opening_balance" class="form-control" step="0.01" value="0"></div>
-            <div class="col-md-4 form-group"><label class="form-label">Adjustment Type</label><select name="adjustment_type" class="form-control"><option value="plus">Plus (+)</option><option value="minus">Minus (-)</option></select></div>
-            <div class="col-md-4 form-group"><label class="form-label">Adjustment Amount</label><input type="number" name="adjustment_amount" class="form-control" step="0.01" value="0" min="0"></div>
           </div>
-          <p class="small text-muted">Adjustment: <strong>Plus (+)</strong> = we owe the supplier more, <strong>Minus (-)</strong> = reduces our liability.</p>
           <div class="form-group"><div class="custom-control custom-switch"><input type="checkbox" class="custom-control-input" id="s" name="status" checked><label class="custom-control-label" for="s">Active</label></div></div>
           <button type="submit" class="btn btn-primary btn-block py-2"><i class="fas fa-save"></i> Create</button>
           <a href="suppliers.php" class="btn btn-secondary btn-block">Cancel</a>

@@ -116,6 +116,50 @@ $stmt = $pdo->prepare("SELECT cb.*, cbd.date AS daily_date FROM cash_book cb LEF
 $stmt->execute([$from, $to]);
 $transactions = $stmt->fetchAll();
 
+// Pre-fetch related records for richer descriptions
+$payment_ids = []; $expense_ids = []; $supplier_payment_ids = [];
+foreach ($transactions as $t) {
+    if ($t['reference_type'] === 'payment' && $t['reference_id']) $payment_ids[] = (int)$t['reference_id'];
+    elseif ($t['reference_type'] === 'expense' && $t['reference_id']) $expense_ids[] = (int)$t['reference_id'];
+    elseif ($t['reference_type'] === 'supplier_payment' && $t['reference_id']) $supplier_payment_ids[] = (int)$t['reference_id'];
+}
+
+// Build lookup maps
+$payment_info = [];
+if (!empty($payment_ids)) {
+    $ids = implode(',', $payment_ids);
+    $rows = $pdo->query("SELECT p.id, p.sale_id, s.invoice_no, c.full_name AS customer_name,
+           GROUP_CONCAT(DISTINCT COALESCE(pr.name, si.item_description) SEPARATOR ', ') AS products
+           FROM payments p
+           LEFT JOIN sales s ON p.sale_id = s.id
+           LEFT JOIN customers c ON s.customer_id = c.id
+           LEFT JOIN sale_items si ON si.sale_id = s.id
+           LEFT JOIN products pr ON si.product_id = pr.id
+           WHERE p.id IN ($ids)
+           GROUP BY p.id")->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($rows as $r) { $payment_info[$r['id']] = $r; }
+}
+
+$expense_info = [];
+if (!empty($expense_ids)) {
+    $ids = implode(',', $expense_ids);
+    $rows = $pdo->query("SELECT e.id, e.description, ec.name AS category_name
+           FROM expenses e
+           LEFT JOIN expense_categories ec ON e.category_id = ec.id
+           WHERE e.id IN ($ids)")->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($rows as $r) { $expense_info[$r['id']] = $r; }
+}
+
+$supplier_pay_info = [];
+if (!empty($supplier_payment_ids)) {
+    $ids = implode(',', $supplier_payment_ids);
+    $rows = $pdo->query("SELECT sp.id, s.contact_person, s.name AS company_name
+           FROM supplier_payments sp
+           LEFT JOIN suppliers s ON sp.supplier_id = s.id
+           WHERE sp.id IN ($ids)")->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($rows as $r) { $supplier_pay_info[$r['id']] = $r; }
+}
+
 // Calculate totals
 $total_inflow = 0;
 $total_outflow = 0;
@@ -292,10 +336,31 @@ require_once '../../includes/header.php';
                   $color = 'secondary';
               }
             ?>
+              <?php
+                $rich_desc = htmlspecialchars($t['description'] ?? '');
+                if ($t['reference_type'] === 'payment' && isset($payment_info[$t['reference_id']])) {
+                    $pi = $payment_info[$t['reference_id']];
+                    $parts = [];
+                    if ($pi['customer_name']) $parts[] = 'Customer: <strong>' . htmlspecialchars($pi['customer_name']) . '</strong>';
+                    if ($pi['invoice_no']) $parts[] = 'Invoice: <strong>' . htmlspecialchars($pi['invoice_no']) . '</strong>';
+                    if ($pi['products']) $parts[] = 'Product: <span class="text-muted">' . htmlspecialchars($pi['products']) . '</span>';
+                    if (!empty($parts)) $rich_desc = implode(' | ', $parts);
+                } elseif ($t['reference_type'] === 'expense' && isset($expense_info[$t['reference_id']])) {
+                    $ei = $expense_info[$t['reference_id']];
+                    $parts = [];
+                    $parts[] = 'Category: <strong>' . htmlspecialchars($ei['category_name'] ?? 'Uncategorized') . '</strong>';
+                    if ($ei['description']) $parts[] = '<span class="text-muted">' . htmlspecialchars($ei['description']) . '</span>';
+                    if (!empty($parts)) $rich_desc = implode(' | ', $parts);
+                } elseif ($t['reference_type'] === 'supplier_payment' && isset($supplier_pay_info[$t['reference_id']])) {
+                    $sp = $supplier_pay_info[$t['reference_id']];
+                    $name = ($sp['contact_person'] ?? '') . ' (' . ($sp['company_name'] ?? '') . ')';
+                    $rich_desc = 'Supplier: <strong>' . htmlspecialchars(trim($name, ' ()')) . '</strong>';
+                }
+              ?>
               <tr>
                 <td><?= formatDate($t['transaction_date']) ?></td>
                 <td><span class="badge badge-<?= $color ?>"><?= $label ?></span></td>
-                <td><?= htmlspecialchars($t['description'] ?? '-') ?></td>
+                <td class="small"><?= $rich_desc ?></td>
                 <td class="text-right font-weight-bold <?= $t['transaction_type'] === 'inflow' ? 'text-success' : ($t['transaction_type'] === 'outflow' ? 'text-danger' : '') ?>">
                   <?= $t['transaction_type'] === 'inflow' ? '+' : ($t['transaction_type'] === 'outflow' ? '-' : '') ?><?= formatCurrency($t['amount']) ?>
                 </td>

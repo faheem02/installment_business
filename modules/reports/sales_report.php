@@ -136,7 +136,7 @@ $method_colors = [
 </div>
 
 <!-- Payment Method & Status Breakdown -->
-<div class="row mb-4">
+<!-- <div class="row mb-4">
   <div class="col-md-6 mb-3">
     <div class="card shadow h-100">
       <div class="card-header py-3">
@@ -211,10 +211,10 @@ $method_colors = [
       </div>
     </div>
   </div>
-</div>
+</div> -->
 
 <!-- Daily Trend -->
-<div class="card shadow mb-4">
+<!-- <div class="card shadow mb-4">
   <div class="card-header py-3">
     <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-calendar-day"></i> Daily Sales Trend</h6>
   </div>
@@ -247,7 +247,7 @@ $method_colors = [
       <p class="text-muted mb-0 text-center">No sales in this period</p>
     <?php endif; ?>
   </div>
-</div>
+</div> -->
 
 <!-- Detailed Sales List -->
 <div class="card shadow mb-4">

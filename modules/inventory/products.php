@@ -62,10 +62,10 @@ require_once '../../includes/header.php';
     <div class="table-responsive">
       <table class="table table-bordered table-hover">
         <thead class="thead-light">
-          <tr><th>Code</th><th>Name</th><th>Type</th><th>Category</th><th>Brand</th><th>Supplier</th><th class="text-right">Sale Price</th><th>Status</th><th>Actions</th></tr>
+          <tr><th>Code</th><th>Name</th><th>Type</th><th>Category</th><th>Brand</th><th>Supplier</th><th class="text-right">Sale Price</th><th class="text-right">Stock</th><th>Status</th><th>Actions</th></tr>
         </thead>
         <tbody>
-          <?php if (empty($items)): ?><tr><td colspan="9" class="text-center text-muted">No products found</td></tr>
+          <?php if (empty($items)): ?><tr><td colspan="10" class="text-center text-muted">No products found</td></tr>
           <?php else: foreach ($items as $p): ?>
             <tr>
               <td><strong><?=htmlspecialchars($p['code'])?></strong></td>
@@ -81,6 +81,15 @@ require_once '../../includes/header.php';
               <td><?=htmlspecialchars($p['brand_name']??'-')?></td>
               <td><?php if ($p['supplier_name']): $_c = $p['supplier_contact'] ?? ''; echo htmlspecialchars($_c ? "$_c ({$p['supplier_name']})" : $p['supplier_name']); else: echo '-'; endif; ?></td>
               <td class="text-right"><?=formatCurrency($p['sale_price'])?></td>
+              <td class="text-right">
+                <?php if ((int)$p['stock_quantity'] <= 0): ?>
+                  <span class="badge badge-danger">0</span>
+                <?php elseif ((int)$p['min_stock_level'] > 0 && (int)$p['stock_quantity'] <= (int)$p['min_stock_level']): ?>
+                  <span class="badge badge-warning"><?= (int)$p['stock_quantity'] ?></span>
+                <?php else: ?>
+                  <span class="badge badge-success"><?= (int)$p['stock_quantity'] ?></span>
+                <?php endif; ?>
+              </td>
               <td><span class="badge badge-<?=$p['status']?'success':'secondary'?>"><?=$p['status']?'Active':'Inactive'?></span></td>
               <td>
                 <a href="product_edit.php?id=<?=$p['id']?>" class="btn btn-sm btn-warning" title="Edit"><i class="fas fa-edit"></i></a>

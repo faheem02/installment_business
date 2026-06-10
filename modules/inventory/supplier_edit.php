@@ -7,16 +7,12 @@ $id = (int)($_GET['id']??0);
 $item = getById('suppliers', $id);
 if (!$item) redirect('suppliers.php', 'Supplier not found', 'error');
 if ($_SERVER['REQUEST_METHOD']==='POST') {
-    $adjustment_amount = (float)($_POST['adjustment_amount']??0);
-    $adjustment_type = $_POST['adjustment_type'] ?? 'plus';
-    $adjustment = ($adjustment_type === 'minus' ? -1 : 1) * $adjustment_amount;
     update('suppliers', [
         'contact_person'=>$_POST['name'],
         'name'=>$_POST['company_name']??'',
         'phone'=>$_POST['phone']??'',
         'email'=>$_POST['email']??'','address'=>$_POST['address']??'','city'=>$_POST['city']??'',
         'opening_balance'=>(float)($_POST['opening_balance']??0),
-        'adjustment'=>$adjustment,
         'status'=>isset($_POST['status'])?1:0,'updated_at'=>date('Y-m-d')
     ], $id);
     redirect('suppliers.php', 'Supplier updated');
@@ -43,13 +39,9 @@ require_once '../../includes/header.php';
           <hr>
           <h6 class="font-weight-bold text-primary"><i class="fas fa-coins"></i> Financial Details</h6>
           <p class="small text-muted">Supplier amounts are credit by default (we owe the supplier).</p>
-          <?php $adj_val = (float)$item['adjustment']; $adj_type = $adj_val >= 0 ? 'plus' : 'minus'; $adj_abs = abs($adj_val); ?>
           <div class="row">
             <div class="col-md-4 form-group"><label>Opening Balance (Credit)</label><input type="number" name="opening_balance" class="form-control" step="0.01" value="<?=$item['opening_balance']?>"></div>
-            <div class="col-md-4 form-group"><label>Adjustment Type</label><select name="adjustment_type" class="form-control"><option value="plus" <?=$adj_type==='plus'?'selected':''?>>Plus (+)</option><option value="minus" <?=$adj_type==='minus'?'selected':''?>>Minus (-)</option></select></div>
-            <div class="col-md-4 form-group"><label>Adjustment Amount</label><input type="number" name="adjustment_amount" class="form-control" step="0.01" value="<?=$adj_abs?>" min="0"></div>
           </div>
-          <p class="small text-muted">Adjustment: <strong>Plus (+)</strong> = we owe the supplier more, <strong>Minus (-)</strong> = reduces our liability.</p>
           <div class="form-group"><div class="custom-control custom-switch"><input type="checkbox" class="custom-control-input" id="s" name="status" <?=$item['status']?'checked':''?>><label class="custom-control-label" for="s">Active</label></div></div>
           <button type="submit" class="btn btn-primary btn-block py-2"><i class="fas fa-save"></i> Update</button>
           <a href="suppliers.php" class="btn btn-secondary btn-block">Cancel</a>

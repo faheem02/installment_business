@@ -105,11 +105,14 @@ $title = 'Invoice #' . htmlspecialchars($sale['invoice_no']);
         <tr class="font-weight-bold" style="font-size:1.15rem;"><td>Total</td><td style="color:#0f172a;"><?=formatCurrency($sale['total_amount'])?></td></tr>
         <tr><td>Down Payment</td><td><?=formatCurrency($sale['down_payment'])?></td></tr>
         <tr class="font-weight-bold text-primary"><td>Financed</td><td><?=formatCurrency($sale['financed_amount'])?></td></tr>
+        <tr><td>Interest Rate</td><td><?= htmlspecialchars($sale['interest_rate'] ?? '0') ?>%</td></tr>
+        <tr><td>Interest Amount</td><td class="text-danger"><?= formatCurrency($sale['interest_amount'] ?? 0) ?></td></tr>
+        <tr class="font-weight-bold" style="color:#0f172a;"><td>Total Payable (Financed + Interest)</td><td><?= formatCurrency((float)$sale['financed_amount'] + (float)($sale['interest_amount'] ?? 0)) ?></td></tr>
+        <tr><td>Monthly Installment</td><td><?= formatCurrency($sale['monthly_installment'] ?? 0) ?></td></tr>
+        <tr><td>Number of Installments</td><td><?= (int)($sale['total_installments'] ?? 0) ?></td></tr>
         <?php
-        $total_inst_paid = 0;
-        foreach ($payments as $p) { $total_inst_paid += (float)$p['amount']; }
-        $total_paid = (float)$sale['down_payment'] + $total_inst_paid;
-        $remaining = max(0, (float)$sale['total_amount'] - $total_paid);
+        $total_paid = array_sum(array_map(fn($p) => (float)$p['amount'], $payments));
+        $remaining = max(0, (float)$sale['total_amount'] + (float)($sale['interest_amount'] ?? 0) - $total_paid);
         ?>
         <tr><td>Total Paid</td><td class="text-success font-weight-bold"><?=formatCurrency($total_paid)?></td></tr>
         <tr class="<?=$remaining>0?'text-danger font-weight-bold':''?>"><td>Remaining</td><td><?=formatCurrency($remaining)?></td></tr>

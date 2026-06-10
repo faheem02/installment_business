@@ -290,6 +290,8 @@ CREATE TABLE sales (
     total_amount        DECIMAL(12,2) NOT NULL DEFAULT 0.00,
     down_payment        DECIMAL(12,2) DEFAULT 0.00,
     financed_amount     DECIMAL(12,2) DEFAULT 0.00 COMMENT 'total - down payment',
+    interest_rate       DECIMAL(5,2) DEFAULT 0.00 COMMENT 'plan interest rate at time of sale',
+    interest_amount     DECIMAL(12,2) DEFAULT 0.00 COMMENT 'calculated interest on financed amount',
     installment_plan_id INT DEFAULT NULL,
     monthly_installment DECIMAL(12,2) DEFAULT 0.00,
     total_installments  INT DEFAULT 0,
@@ -478,7 +480,25 @@ CREATE TABLE expenses (
 ) ENGINE=InnoDB;
 
 -- ---------------------------------------------------------
--- 26. chart_of_accounts
+-- 26. supplier_payments
+-- ---------------------------------------------------------
+CREATE TABLE supplier_payments (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    supplier_id     INT NOT NULL,
+    amount          DECIMAL(12,2) NOT NULL,
+    payment_method  ENUM('cash','card','bank_transfer','bank') DEFAULT 'cash',
+    bank_account_id INT DEFAULT NULL,
+    description     TEXT,
+    payment_date    DATE NOT NULL,
+    created_by      INT DEFAULT NULL,
+    created_at      DATE NOT NULL,
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE CASCADE,
+    FOREIGN KEY (bank_account_id) REFERENCES bank_accounts(id) ON DELETE SET NULL,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+-- ---------------------------------------------------------
+-- 28. chart_of_accounts
 -- ---------------------------------------------------------
 CREATE TABLE chart_of_accounts (
     id              INT AUTO_INCREMENT PRIMARY KEY,
@@ -496,7 +516,7 @@ CREATE TABLE chart_of_accounts (
 ) ENGINE=InnoDB;
 
 -- ---------------------------------------------------------
--- 27. journal_entries
+-- 29. journal_entries
 -- ---------------------------------------------------------
 CREATE TABLE journal_entries (
     id              INT AUTO_INCREMENT PRIMARY KEY,
@@ -512,7 +532,7 @@ CREATE TABLE journal_entries (
 ) ENGINE=InnoDB;
 
 -- ---------------------------------------------------------
--- 28. journal_entry_items
+-- 30. journal_entry_items
 -- ---------------------------------------------------------
 CREATE TABLE journal_entry_items (
     id              INT AUTO_INCREMENT PRIMARY KEY,
