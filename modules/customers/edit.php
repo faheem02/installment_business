@@ -74,7 +74,7 @@ require_once '../../includes/header.php';
         </div>
         <div class="col-md-4 mb-3">
           <label class="form-label">CNIC Expiry</label>
-          <input type="date" name="cnic_expiry" class="form-control" value="<?= $customer['cnic_expiry'] ?? '' ?>">
+          <input type="text" name="cnic_expiry" class="form-control datepicker" value="<?= $customer['cnic_expiry'] ?? '' ?>" autocomplete="off">
         </div>
         <div class="col-md-4 mb-3">
           <label class="form-label">Guardian Name</label>

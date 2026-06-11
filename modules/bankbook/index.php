@@ -168,9 +168,9 @@ require_once '../../includes/header.php';
 
 <form method="get" class="form-inline mb-4">
   <label class="mr-2 text-muted small">From:</label>
-  <input type="date" name="from" class="form-control form-control-sm mr-3" value="<?= $from ?>">
+  <input type="text" name="from" class="form-control form-control-sm mr-3 datepicker" value="<?= $from ?>" autocomplete="off">
   <label class="mr-2 text-muted small">To:</label>
-  <input type="date" name="to" class="form-control form-control-sm mr-3" value="<?= $to ?>">
+  <input type="text" name="to" class="form-control form-control-sm mr-3 datepicker" value="<?= $to ?>" autocomplete="off">
   <label class="mr-2 text-muted small">Account:</label>
   <select name="account" class="form-control form-control-sm mr-3">
     <option value="">All Accounts</option>
@@ -438,7 +438,7 @@ require_once '../../includes/header.php';
           <div class="row">
             <div class="col-md-6 form-group">
               <label class="small">Date</label>
-              <input type="date" name="tran_date" class="form-control" value="<?= date('Y-m-d') ?>" required>
+              <input type="text" name="tran_date" class="form-control datepicker" value="<?= date('Y-m-d') ?>" required autocomplete="off">
             </div>
             <div class="col-md-6 form-group">
               <label class="small">Type</label>
@@ -467,7 +467,7 @@ require_once '../../includes/header.php';
             </div>
             <div class="col-md-4 form-group">
               <label class="small">Cheque Date</label>
-              <input type="date" name="cheque_date" class="form-control">
+              <input type="text" name="cheque_date" class="form-control datepicker" autocomplete="off">
             </div>
             <div class="col-md-4 form-group">
               <label class="small">Cheque Status</label>

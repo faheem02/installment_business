@@ -37,6 +37,12 @@
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/4.6.2/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      flatpickr('.datepicker', { dateFormat: 'Y-m-d', allowInput: true });
+    });
+  </script>
   <script src="<?= $base_url ?? '' ?>assets/js/main.js"></script>
 </body>
 </html>

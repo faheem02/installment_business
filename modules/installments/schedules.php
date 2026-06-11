@@ -157,18 +157,20 @@ foreach ($items as $i) {
           </select>
         </div>
         <div class="col-md-3">
-          <select name="customer_id" class="form-control">
-            <option value="">All Customers</option>
+          <?php $sel_customer_name = ''; foreach ($customers as $c) { if ($c['id'] == $customer_id) { $sel_customer_name = $c['full_name']; break; } } ?>
+          <input type="text" class="form-control" id="customerSearch" list="customerList" placeholder="All Customers" value="<?=htmlspecialchars($sel_customer_name)?>" autocomplete="off">
+          <input type="hidden" name="customer_id" id="customerIdHidden" value="<?=$customer_id?>">
+          <datalist id="customerList">
             <?php foreach ($customers as $c): ?>
-              <option value="<?=$c['id']?>" <?=$customer_id===$c['id']?'selected':''?>><?=htmlspecialchars($c['full_name'])?></option>
+              <option value="<?=htmlspecialchars($c['full_name'])?>" data-id="<?=$c['id']?>"></option>
             <?php endforeach; ?>
-          </select>
+          </datalist>
         </div>
         <div class="col-md-2">
-          <input type="date" name="from_date" class="form-control" placeholder="From date" value="<?=htmlspecialchars($from_date)?>">
+          <input type="text" name="from_date" class="form-control datepicker" placeholder="From date" value="<?=htmlspecialchars($from_date)?>" autocomplete="off">
         </div>
         <div class="col-md-2">
-          <input type="date" name="to_date" class="form-control" placeholder="To date" value="<?=htmlspecialchars($to_date)?>">
+          <input type="text" name="to_date" class="form-control datepicker" placeholder="To date" value="<?=htmlspecialchars($to_date)?>" autocomplete="off">
         </div>
         <div class="col-md-2 d-flex align-items-center">
           <button type="submit" class="btn btn-sm btn-primary mr-1"><i class="fas fa-filter"></i> Filter</button>
@@ -318,6 +320,20 @@ foreach ($items as $i) {
 $(document).on('change', '.payment-method-select', function() {
     $(this).closest('.modal-body').find('.bank-account-row').toggle($(this).val() === 'bank');
 });
+
+// Customer search datalist sync
+$('#customerSearch').on('change input', function() {
+  var val = $(this).val();
+  var opt = $('#customerList option').filter(function() { return $(this).val() === val; });
+  if (opt.length) {
+    $('#customerIdHidden').val(opt.data('id'));
+  } else {
+    $('#customerIdHidden').val('');
+  }
+});
+
+// On page load, trigger to set hidden ID
+$('#customerSearch').trigger('change');
 
 function openPayment(id, invoice, customer, instNo, amount, paid) {
   document.getElementById('instId').value = id;

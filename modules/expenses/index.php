@@ -159,9 +159,9 @@ require_once '../../includes/header.php';
 
 <form method="get" class="form-inline mb-4">
   <label class="mr-2 text-muted small">From:</label>
-  <input type="date" name="from" class="form-control form-control-sm mr-3" value="<?= $from ?>">
+  <input type="text" name="from" class="form-control form-control-sm mr-3 datepicker" value="<?= $from ?>" autocomplete="off">
   <label class="mr-2 text-muted small">To:</label>
-  <input type="date" name="to" class="form-control form-control-sm mr-3" value="<?= $to ?>">
+  <input type="text" name="to" class="form-control form-control-sm mr-3 datepicker" value="<?= $to ?>" autocomplete="off">
   <label class="mr-2 text-muted small">Category:</label>
   <select name="category" class="form-control form-control-sm mr-3">
     <option value="">All Categories</option>
@@ -306,7 +306,7 @@ require_once '../../includes/header.php';
           <div class="row">
             <div class="col-md-4 form-group">
               <label class="small">Date <span class="text-danger">*</span></label>
-              <input type="date" name="expense_date" class="form-control" value="<?= date('Y-m-d') ?>" required>
+              <input type="text" name="expense_date" class="form-control datepicker" value="<?= date('Y-m-d') ?>" required autocomplete="off">
             </div>
             <div class="col-md-4 form-group">
               <label class="small">Amount <span class="text-danger">*</span></label>
@@ -372,7 +372,7 @@ require_once '../../includes/header.php';
           <div class="row">
             <div class="col-md-4 form-group">
               <label class="small">Date <span class="text-danger">*</span></label>
-              <input type="date" name="expense_date" id="edit_expense_date" class="form-control" required>
+              <input type="text" name="expense_date" id="edit_expense_date" class="form-control datepicker" required autocomplete="off">
             </div>
             <div class="col-md-4 form-group">
               <label class="small">Amount <span class="text-danger">*</span></label>

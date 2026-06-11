@@ -214,7 +214,7 @@ require_once '../../includes/header.php';
           </select>
         </div>
         <div class="row">
-          <div class="col-6"><div class="form-group mb-0"><label class="small text-muted">Date</label><input type="date" name="sale_date" class="form-control" value="<?= date('Y-m-d') ?>"></div></div>
+          <div class="col-6"><div class="form-group mb-0"><label class="small text-muted">Date</label><input type="text" name="sale_date" class="form-control datepicker" value="<?= date('Y-m-d') ?>" autocomplete="off"></div></div>
           <div class="col-6"><div class="form-group mb-0"><label class="small text-muted">Notes</label><input type="text" name="notes" class="form-control" placeholder="Optional"></div></div>
         </div>
       </div>

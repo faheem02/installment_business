@@ -612,7 +612,7 @@ require_once '../../includes/header.php';
         <form method="post">
           <div class="form-group">
             <label class="small">Date</label>
-            <input type="date" name="sale_date" class="form-control" value="<?= date('Y-m-d') ?>" required>
+            <input type="text" name="sale_date" class="form-control datepicker" value="<?= date('Y-m-d') ?>" required autocomplete="off">
           </div>
           <div class="form-group">
             <label class="small">Invoice No</label>
@@ -689,7 +689,7 @@ require_once '../../includes/header.php';
         <form method="post">
           <div class="form-group">
             <label class="small">Date</label>
-            <input type="date" name="return_date" class="form-control" value="<?= date('Y-m-d') ?>" required>
+            <input type="text" name="return_date" class="form-control datepicker" value="<?= date('Y-m-d') ?>" required autocomplete="off">
           </div>
           <div class="form-group">
             <label class="small">Amount <span class="text-danger">*</span></label>
@@ -851,7 +851,7 @@ require_once '../../includes/header.php';
                 <div class="col-6">
                   <div class="form-group mb-2">
                     <label class="small text-muted">Date</label>
-                    <input type="date" name="payment_date" class="form-control" value="<?= date('Y-m-d') ?>" required>
+                    <input type="text" name="payment_date" class="form-control datepicker" value="<?= date('Y-m-d') ?>" required autocomplete="off">
                   </div>
                 </div>
                 <div class="col-6">

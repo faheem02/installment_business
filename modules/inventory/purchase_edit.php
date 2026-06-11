@@ -71,7 +71,7 @@ require_once '../../includes/header.php';
       <div class="row">
         <div class="col-md-3 form-group">
           <label class="font-weight-bold small">Date</label>
-          <input type="date" name="purchase_date" class="form-control" value="<?=$purchase['purchase_date']?>" required>
+          <input type="text" name="purchase_date" class="form-control datepicker" value="<?=$purchase['purchase_date']?>" required autocomplete="off">
         </div>
         <div class="col-md-3 form-group">
           <label class="font-weight-bold small">Supplier</label>

@@ -145,7 +145,7 @@ require_once '../../includes/header.php';
             </div>
             <div class="col-md-4 form-group">
               <label class="form-label">Payment Date</label>
-              <input type="date" name="payment_date" class="form-control" value="<?=date('Y-m-d')?>">
+              <input type="text" name="payment_date" class="form-control datepicker" value="<?=date('Y-m-d')?>" autocomplete="off">
             </div>
             <div class="col-md-4 form-group">
               <label class="form-label">Method</label>

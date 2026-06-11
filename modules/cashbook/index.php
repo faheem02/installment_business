@@ -185,9 +185,9 @@ require_once '../../includes/header.php';
 
 <form method="get" class="form-inline mb-4">
   <label class="mr-2 text-muted small">From:</label>
-  <input type="date" name="from" class="form-control form-control-sm mr-3" value="<?= $from ?>">
+  <input type="text" name="from" class="form-control form-control-sm mr-3 datepicker" value="<?= $from ?>" autocomplete="off">
   <label class="mr-2 text-muted small">To:</label>
-  <input type="date" name="to" class="form-control form-control-sm mr-3" value="<?= $to ?>">
+  <input type="text" name="to" class="form-control form-control-sm mr-3 datepicker" value="<?= $to ?>" autocomplete="off">
   <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-search"></i> View</button>
   <a href="index.php" class="btn btn-sm btn-secondary ml-2">This Month</a>
 </form>
@@ -393,7 +393,7 @@ require_once '../../includes/header.php';
         <div class="modal-body">
           <div class="form-group">
             <label class="small">Date</label>
-            <input type="date" name="date" class="form-control" value="<?= date('Y-m-d') ?>" required>
+            <input type="text" name="date" class="form-control datepicker" value="<?= date('Y-m-d') ?>" required autocomplete="off">
           </div>
           <div class="form-group">
             <label class="small">Opening Balance</label>
@@ -422,7 +422,7 @@ require_once '../../includes/header.php';
           <div class="row">
             <div class="col-md-6 form-group">
               <label class="small">Date</label>
-              <input type="date" name="tran_date" class="form-control" value="<?= date('Y-m-d') ?>" required>
+              <input type="text" name="tran_date" class="form-control datepicker" value="<?= date('Y-m-d') ?>" required autocomplete="off">
             </div>
             <div class="col-md-6 form-group">
               <label class="small">Type</label>

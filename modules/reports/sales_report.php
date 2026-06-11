@@ -72,9 +72,9 @@ $method_colors = [
 
 <form method="get" class="form-inline mb-4">
   <label class="mr-2 text-muted small">From:</label>
-  <input type="date" name="from" class="form-control form-control-sm mr-3" value="<?= $from ?>">
+  <input type="text" name="from" class="form-control form-control-sm mr-3 datepicker" value="<?= $from ?>" autocomplete="off">
   <label class="mr-2 text-muted small">To:</label>
-  <input type="date" name="to" class="form-control form-control-sm mr-3" value="<?= $to ?>">
+  <input type="text" name="to" class="form-control form-control-sm mr-3 datepicker" value="<?= $to ?>" autocomplete="off">
   <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-search"></i> View</button>
   <a href="sales_report.php" class="btn btn-sm btn-secondary ml-2">This Month</a>
   <a href="sales_report.php?from=<?= date('Y-01-01') ?>&to=<?= date('Y-12-31') ?>" class="btn btn-sm btn-info ml-2">This Year</a>

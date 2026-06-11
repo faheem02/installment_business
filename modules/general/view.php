@@ -127,7 +127,7 @@ $closing = $opening + $total_receipts - $total_payments;
           <form method="post">
             <div class="form-group">
               <label class="small font-weight-bold">Date</label>
-              <input type="date" name="transaction_date" class="form-control form-control-sm" value="<?=date('Y-m-d')?>" required>
+              <input type="text" name="transaction_date" class="form-control form-control-sm datepicker" value="<?=date('Y-m-d')?>" required autocomplete="off">
             </div>
             <div class="form-group">
               <label class="small font-weight-bold">Type</label>

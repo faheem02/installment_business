@@ -46,7 +46,7 @@ require_once '../../includes/header.php';
   <h5 class="m-0 font-weight-bold" style="color:#0f172a;"><i class="fas fa-coins"></i> Daily Collection</h5>
   <form method="get" class="form-inline">
     <label class="mr-2 text-muted small">Date:</label>
-    <input type="date" name="date" class="form-control form-control-sm" value="<?= $date ?>" onchange="this.form.submit()">
+    <input type="text" name="date" class="form-control form-control-sm datepicker" value="<?= $date ?>" onchange="this.form.submit()" autocomplete="off">
   </form>
 </div>
 

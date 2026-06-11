@@ -137,7 +137,7 @@ $title = 'Supplier Ledger - ' . htmlspecialchars($supplier['contact_person'] ?? 
   </div>
 
   <div class="r-software">[Software By @ ATR]</div>
-
+   
 </div>
 
 <?php if ($is_print): ?><script>window.print()</script><?php endif; ?>
