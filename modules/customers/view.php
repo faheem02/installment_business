@@ -1063,8 +1063,13 @@ $(document).ready(function() {
     <?php if (empty($customer_ledger)): ?>
       <p class="text-muted mb-0 text-center py-3">No transactions found for this customer.</p>
     <?php else: ?>
+      <div class="row mb-3">
+        <div class="col-md-6">
+          <input type="text" id="ledgerSearch" class="form-control" placeholder="Search by date, ref, description...">
+        </div>
+      </div>
       <div class="table-responsive">
-        <table class="table table-bordered table-hover table-sm">
+        <table class="table table-bordered table-hover table-sm" id="ledgerTable">
           <thead class="thead-light">
           <tr class="table-secondary">
               <td colspan="5" class="text-right font-weight-bold">Opening Balance</td>
@@ -1075,8 +1080,8 @@ $(document).ready(function() {
               <th>Date</th>
               <th>Ref</th>
               <th>Description</th>
+              <th class="text-right">Debit</th>
               <th class="text-right">Credit</th>
-              <th class="text-right">Debit </th>
               <th class="text-right">Balance</th>
             </tr>
           </thead>
@@ -1087,7 +1092,7 @@ $(document).ready(function() {
               $total_debit += $l['debit'];
               $total_credit += $l['credit'];
             ?>
-              <tr class="<?= $l['type'] === 'payment' || $l['type'] === 'return' ? 'table-success' : '' ?>">
+              <tr class="ledger-row <?= $l['type'] === 'payment' || $l['type'] === 'return' ? 'table-success' : '' ?>">
                 <td class="text-nowrap"><?= formatDate($l['date']) ?></td>
                 <td><span class="badge badge-<?= $l['type'] === 'sale' ? 'primary' : ($l['type'] === 'return' ? 'danger' : 'success') ?>"><?= htmlspecialchars($l['ref']) ?></span></td>
                 <td class="small"><?= htmlspecialchars($l['desc']) ?></td>
@@ -1096,6 +1101,7 @@ $(document).ready(function() {
                 <td class="text-right font-weight-bold"><?= formatCurrency($bal) ?></td>
               </tr>
             <?php endforeach; ?>
+            <tr class="no-results" style="display:none;"><td colspan="6" class="text-center text-muted">No matching records</td></tr>
           </tbody>
           <tfoot>
             <tr class="font-weight-bold" style="background:#f8f9fc;">
@@ -1110,6 +1116,22 @@ $(document).ready(function() {
     <?php endif; ?>
   </div>
 </div>
+
+<script>
+$(document).ready(function() {
+  $('#ledgerSearch').on('keyup', function() {
+    var val = $(this).val().toLowerCase();
+    var visible = 0;
+    $('#ledgerTable tbody tr.ledger-row').each(function() {
+      var text = $(this).text().toLowerCase();
+      var match = text.indexOf(val) > -1;
+      $(this).toggle(match);
+      if (match) visible++;
+    });
+    $('.no-results').toggle(visible === 0);
+  });
+});
+</script>
 
 <?php endif; ?>
 

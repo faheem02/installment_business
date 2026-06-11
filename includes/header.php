@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-  <title><?= $page_title ?? 'Dashboard' ?> | Installment Business</title>
+  <title><?= $page_title ?? 'Dashboard' ?> | Saim Hasnain Traders</title>
 
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/4.6.2/css/bootstrap.min.css" rel="stylesheet">
@@ -23,7 +23,7 @@
 
     <a class="sidebar-brand" href="<?= $base_url ?? '' ?>index.php">
       <div class="sidebar-brand-icon"><i class="fas fa-handshake"></i></div>
-      <span class="sidebar-brand-text">Installment Business</span>
+      <span class="sidebar-brand-text">Saim Hasnain Traders</span>
     </a>
 
     <hr class="sidebar-divider">
@@ -147,6 +147,14 @@
       <a class="nav-link <?= str_contains($_SERVER['PHP_SELF'],'bankbook') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/bankbook/index.php">
         <i class="fas fa-fw fa-university"></i>
         <span>Bank Book</span>
+      </a>
+    </div>
+
+    <!-- General Ledger -->
+    <div class="nav-item">
+      <a class="nav-link <?= str_contains($_SERVER['PHP_SELF'],'general') ? 'active' : '' ?>" href="<?= $base_url ?? '' ?>modules/general/index.php">
+        <i class="fas fa-fw fa-users"></i>
+        <span>General Ledger</span>
       </a>
     </div>
 

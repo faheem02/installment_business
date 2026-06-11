@@ -36,6 +36,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($product_type === 'mobile') {
         $imei1s = $_POST['mobile_imei1'] ?? [];
         $quantity = max(count($imei1s), 1);
+    } elseif ($product_type === 'laptop') {
+        $quantity = (int)($_POST['quantity'] ?? 1);
     } else {
         $quantity = (int)($_POST['quantity'] ?? 1);
     }
@@ -191,7 +193,8 @@ require_once '../../includes/header.php';
               <td class="text-center">
                 <button type="button" class="btn btn-sm btn-info" title="View" data-id="<?=$r['id']?>" onclick="viewPurchase(this)"><i class="fas fa-eye"></i></button>
                 <a href="purchase_edit.php?id=<?=$r['id']?>" class="btn btn-sm btn-primary" title="Edit"><i class="fas fa-pen"></i></a>
-                <a href="purchases.php?delete=<?=$r['id']?>" class="btn btn-sm btn-danger" title="Delete" onclick="return confirm('Delete this purchase? This will adjust stock and remove all associated records.')"><i class="fas fa-trash"></i></a>
+                <a href="javascript:void(0)" onclick="window.open('purchase_print.php?id=<?=$r['id']?>','popup','width=900,height=600')" class="btn btn-sm btn-secondary" title="Print"><i class="fas fa-print"></i></a>
+                <a href="purchases.php?delete=<?=$r['id']?>" class="btn btn-sm btn-danger" title="Delete" onclick="return confirm('Delete this purchase?')"><i class="fas fa-trash"></i></a>
               </td>
             </tr>
           <?php endforeach; endif; ?>
@@ -201,7 +204,6 @@ require_once '../../includes/header.php';
   </div>
 </div>
 
-<!-- New Purchase Form (collapsible) -->
 <div class="card shadow mb-4" id="newPurchaseCard" style="display:none;">
   <div class="card-header py-3">
     <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-plus-circle"></i> New Purchase Entry</h6>
@@ -237,8 +239,12 @@ require_once '../../includes/header.php';
         <input type="radio" name="product_type" value="mobile" id="typeMobile">
         <label for="typeMobile"><i class="fas fa-mobile-alt fa-lg"></i> Mobile</label>
 
+        <input type="radio" name="product_type" value="laptop" id="typeLaptop">
+        <label for="typeLaptop"><i class="fas fa-laptop fa-lg"></i> Laptop</label>
+
         <input type="radio" name="product_type" value="general" id="typeGeneral">
         <label for="typeGeneral"><i class="fas fa-box fa-lg"></i> Others</label>
+        
       </div>
 
       <!-- Bike Section -->
@@ -364,10 +370,49 @@ require_once '../../includes/header.php';
         </div>
       </div>
 
+      <!-- Laptop Section -->
+      <div class="type-section" id="sectionLaptop">
+        <div class="row">
+          <div class="col-md-4 form-group">
+            <label class="font-weight-bold small">Model</label>
+            <select name="product_id" class="form-control" id="laptopProduct" onchange="fillLaptopPrice(this)">
+              <option value="">Select Model</option>
+              <?php
+              $laptops = $pdo->query("SELECT id, code, name, purchase_price, ram, storage FROM products WHERE product_type='laptop' AND status=1")->fetchAll();
+              foreach ($laptops as $l): ?>
+              <option value="<?=$l['id']?>" data-price="<?=$l['purchase_price']?>" data-ram="<?=htmlspecialchars($l['ram']??'')?>" data-storage="<?=htmlspecialchars($l['storage']??'')?>"><?=htmlspecialchars($l['name'])?> (<?=htmlspecialchars($l['code'])?>)</option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="col-md-4 form-group">
+            <label class="font-weight-bold small">Purchase Price</label>
+            <input type="number" name="purchase_price" class="form-control" id="laptopPrice" step="0.01" required>
+          </div>
+          <div class="col-md-4 form-group">
+            <label class="font-weight-bold small">Quantity</label>
+            <input type="number" name="quantity" class="form-control" id="laptopQty" value="1" min="1" required>
+          </div>
+        </div>
+        <div class="row">
+          <div class="col-md-4 form-group">
+            <label class="font-weight-bold small">RAM</label>
+            <input type="text" name="laptop_ram" class="form-control" id="laptopRam" placeholder="e.g. 8GB, 16GB">
+          </div>
+          <div class="col-md-4 form-group">
+            <label class="font-weight-bold small">Storage</label>
+            <input type="text" name="laptop_storage" class="form-control" id="laptopStorage" placeholder="e.g. 512GB, 1TB">
+          </div>
+          <div class="col-md-4 form-group">
+            <label class="font-weight-bold small">Color</label>
+            <input type="text" name="laptop_color" class="form-control" id="laptopColor" placeholder="e.g. Silver, Black">
+          </div>
+        </div>
+      </div>
+
       <div class="row">
         <div class="col-md-12 form-group">
-          <label class="font-weight-bold small">Notes</label>
-          <textarea name="notes" class="form-control" rows="2" placeholder="Optional notes..."></textarea>
+          <label class="font-weight-bold small">Description</label>
+          <textarea name="notes" class="form-control" rows="2" placeholder="Optional Description..."></textarea>
         </div>
       </div>
 
@@ -452,6 +497,14 @@ function fillMobileDetails(sel) {
 
 function fillGeneralPrice(sel) {
   document.getElementById('generalPrice').value = '';
+}
+
+function fillLaptopPrice(sel) {
+  var opt = sel.options[sel.selectedIndex];
+  document.getElementById('laptopPrice').value = opt.dataset.price || '';
+  document.getElementById('laptopRam').value = opt.dataset.ram || '';
+  document.getElementById('laptopStorage').value = opt.dataset.storage || '';
+  document.getElementById('laptopColor').value = '';
 }
 
 function addBikeRow() {
@@ -607,7 +660,7 @@ function viewPurchase(btn) {
                 if (firstType === 'mobile') {
                     html += '<th>#</th><th>IMEI Number</th>';
                 } else if (firstType === 'bike') {
-                    html += '<th>#</th><th>Engine No.</th><th>Chassis No.</th>';
+                    html += '<th>#</th><th>Engine No.</th><th>Chassis No.</th><th>Color</th>';
                 } else {
                     html += '<th>#</th><th>Serial / Identifier</th>';
                 }
@@ -622,11 +675,17 @@ function viewPurchase(btn) {
                         html += '<td>' + escapeHtml(sn.imei_number || '-') + '</td>';
                     } else if (pt === 'bike') {
                         var eng = sn.serial_number || '-';
-                        var cha = '';
-                        if (sn.notes && sn.notes.indexOf(' - ') > -1) {
-                            cha = sn.notes.substring(sn.notes.indexOf(' - ') + 3);
+                        var col = '', cha = '';
+                        if (sn.notes) {
+                            var match = sn.notes.match(/^Bike\s+(.*?)\s*-\s*(.*)$/);
+                            if (match) {
+                                col = match[1].trim();
+                                cha = match[2].trim();
+                            } else {
+                                cha = sn.notes;
+                            }
                         }
-                        html += '<td>' + escapeHtml(eng) + '</td><td>' + escapeHtml(cha) + '</td>';
+                        html += '<td>' + escapeHtml(eng) + '</td><td>' + escapeHtml(cha) + '</td><td>' + escapeHtml(col || '-') + '</td>';
                     } else {
                         html += '<td>' + escapeHtml(sn.serial_number || sn.imei_number || '-') + '</td>';
                     }

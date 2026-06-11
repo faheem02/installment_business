@@ -50,14 +50,31 @@ $title = 'Supplier Ledger - ' . htmlspecialchars($supplier['contact_person'] ?? 
 <title><?=$title?></title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/4.6.2/css/bootstrap.min.css">
 <style>
-  @media print { body { font-size: 11px; } .no-print { display: none !important; } }
-  body { background: #f1f5f9; font-family: 'Segoe UI', sans-serif; }
-  .wrap { max-width: 900px; margin: 30px auto; background: #fff; border-radius: 12px; padding: 35px; box-shadow: 0 4px 24px rgba(0,0,0,.08); }
+  @media print {
+    @page { size: A4; margin: 10mm; }
+    body{ background:#fff; font-size:11px; }
+    .no-print { display:none !important; }
+    .wrap { box-shadow:none !important; border:1px solid #000 !important; max-width:100%; margin:0; }
+  }
+  body { background: #f1f5f9; font-family: 'Segoe UI', Arial, sans-serif; font-size:14px; }
+  .wrap { max-width: 900px; margin: 30px auto; background: #fff; border: 2px solid #1f2937; border-radius: 4px; padding: 0; box-shadow: 0 4px 24px rgba(0,0,0,.08); }
+  .r-header { display:flex; align-items:center; gap:14px; padding: 14px 18px 8px 18px; border-bottom: 2px solid #1f2937; }
+  .r-logo { width:60px; height:60px; border:3px solid #4b5563; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:1.4rem; color:#374151; flex-shrink:0; }
+  .r-company-name { font-size:1.6rem; font-weight:700; margin:0; color:#1f2937; }
+  .r-company-sub { font-size:.85rem; font-weight:600; letter-spacing:.03em; margin:0; color:#1f2937; }
+  .r-company-contact { font-size:.7rem; color:#374151; margin:0; }
+  .r-section-title { font-size:.95rem; font-weight:700; padding: 8px 18px; border-bottom: 1px solid #1f2937; text-decoration: underline; text-underline-offset: 3px; }
+  .r-content { padding: 8px 18px; }
+  .r-row { display:flex; flex-wrap:wrap; padding: 8px 18px; border-bottom: 1px solid #1f2937; font-size:.95rem; gap: 6px 24px; }
+  .r-row .r-field { display:flex; gap:6px; }
+  .r-row .r-field .lbl { font-weight:700; }
+  .r-row .r-field .val { font-weight:400; }
   table { width: 100%; border-collapse: collapse; }
   th, td { border: 1px solid #e2e8f0; padding: 6px 10px; text-align: center; }
   th { background: #f8fafc; color: #475569; font-size: 12px; }
   td.text-right { text-align: right; }
   td.text-left { text-align: left; }
+  .r-software { text-align:left; font-size:.7rem; color:#9ca3af; padding: 6px 18px 14px 18px; }
 </style>
 </head>
 <body>
@@ -69,62 +86,57 @@ $title = 'Supplier Ledger - ' . htmlspecialchars($supplier['contact_person'] ?? 
 
 <div class="wrap">
 
-  <div class="d-flex justify-content-between align-items-start mb-4">
+  <div class="r-header">
+    <div class="r-logo">SHT</div>
     <div>
-      <h4 class="font-weight-bold mb-1" style="color:#0f172a;">Installment Business</h4>
-      <p class="text-muted mb-0">Supplier Ledger</p>
-    </div>
-    <div class="text-right">
-      <h5 class="font-weight-bold mb-1">LEDGER</h5>
-      <p class="mb-0 text-muted"><?= date('d-m-Y') ?></p>
+      <p class="r-company-name">Saim Hasnain Traders</p>
+      <p class="r-company-sub">CHAK NUM 14/8AR Talambah Road Mia Chanu</p>
+      <p class="r-company-contact">Phone: Mahar Falak 03030344214 / Mahar Shahid 03346881214</p>
     </div>
   </div>
 
-  <hr>
+  <div class="r-section-title">Supplier Ledger</div>
 
-  <div class="row mb-3">
-    <div class="col-sm-6">
-      <strong><?= htmlspecialchars(($supplier['contact_person'] ?? '') . ' (' . ($supplier['name'] ?? '') . ')') ?></strong><br>
-      <span class="text-muted"><?= htmlspecialchars($supplier['phone'] ?? '') ?></span>
-    </div>
-    <div class="col-sm-6 text-sm-right">
-      <span class="text-muted">Opening Balance: </span><strong><?= formatCurrency($opening) ?></strong><br>
-      <span class="text-muted">Closing Balance: </span><strong><?= formatCurrency($closing) ?></strong>
-    </div>
+  <div class="r-row">
+    <div class="r-field" style="width:100%;"><span class="lbl">Supplier:</span><span class="val"><?= htmlspecialchars(($supplier['contact_person'] ?? '') . ' (' . ($supplier['name'] ?? '') . ')') ?> (<?= htmlspecialchars($supplier['phone'] ?? '') ?>)</span></div>
+    <div class="r-field"><span class="lbl">Opening Balance:</span><span class="val"><?= formatCurrency($opening) ?></span></div>
+    <div class="r-field"><span class="lbl">Closing Balance:</span><span class="val" style="color:#dc2626;font-weight:700;"><?= formatCurrency($closing) ?></span></div>
   </div>
 
-  <table>
-    <thead>
-      <tr><th style="width:100px;">Date</th><th style="width:90px;">Ref</th><th class="text-left">Description</th><th style="width:100px;">Debit</th><th style="width:100px;">Credit</th><th style="width:100px;">Balance</th></tr>
-    </thead>
-    <tbody>
-      <tr style="background:#f8f9fc;"><td colspan="5" class="text-right"><strong>Opening Balance</strong></td><td><strong><?= formatCurrency($opening) ?></strong></td></tr>
-      <?php $bal = $opening; foreach ($ledger as $l):
-        $bal += $l['debit'] - $l['credit'];
-        $bg = $l['type'] === 'payment' ? 'style="background:#f0fff4;"' : '';
-      ?>
-        <tr <?= $bg ?>>
-          <td><?= formatDate($l['date']) ?></td>
-          <td><span class="badge badge-secondary"><?= htmlspecialchars($l['ref']) ?></span></td>
-          <td class="text-left small"><?= htmlspecialchars($l['desc']) ?></td>
-          <td class="text-right"><?= $l['debit'] ? formatCurrency($l['debit']) : '-' ?></td>
-          <td class="text-right"><?= $l['credit'] ? formatCurrency($l['credit']) : '-' ?></td>
-          <td class="text-right"><strong><?= formatCurrency($bal) ?></strong></td>
+  <div class="r-section-title">Ledger Entries</div>
+  <div style="padding:8px 18px;">
+    <table>
+      <thead>
+        <tr><th style="width:100px;">Date</th><th style="width:90px;">Ref</th><th class="text-left">Description</th><th style="width:100px;">Debit</th><th style="width:100px;">Credit</th><th style="width:100px;">Balance</th></tr>
+      </thead>
+      <tbody>
+        <tr style="background:#f8f9fc;"><td colspan="5" class="text-right"><strong>Opening Balance</strong></td><td><strong><?= formatCurrency($opening) ?></strong></td></tr>
+        <?php $bal = $opening; foreach ($ledger as $l):
+          $bal += $l['debit'] - $l['credit'];
+          $bg = $l['type'] === 'payment' ? 'style="background:#f0fff4;"' : '';
+        ?>
+          <tr <?= $bg ?>>
+            <td><?= formatDate($l['date']) ?></td>
+            <td><span class="badge badge-secondary"><?= htmlspecialchars($l['ref']) ?></span></td>
+            <td class="text-left small"><?= htmlspecialchars($l['desc']) ?></td>
+            <td class="text-right"><?= $l['debit'] ? formatCurrency($l['debit']) : '-' ?></td>
+            <td class="text-right"><?= $l['credit'] ? formatCurrency($l['credit']) : '-' ?></td>
+            <td class="text-right"><strong><?= formatCurrency($bal) ?></strong></td>
+          </tr>
+        <?php endforeach; ?>
+      </tbody>
+      <tfoot>
+        <tr style="background:#f8f9fc;font-weight:bold;">
+          <td colspan="3" class="text-right">Totals</td>
+          <td class="text-right"><?= formatCurrency($debit_total) ?></td>
+          <td class="text-right"><?= formatCurrency($credit_total) ?></td>
+          <td class="text-right"><?= formatCurrency($closing) ?></td>
         </tr>
-      <?php endforeach; ?>
-    </tbody>
-    <tfoot>
-      <tr style="background:#f8f9fc;font-weight:bold;">
-        <td colspan="3" class="text-right">Totals</td>
-        <td class="text-right"><?= formatCurrency($debit_total) ?></td>
-        <td class="text-right"><?= formatCurrency($credit_total) ?></td>
-        <td class="text-right"><?= formatCurrency($closing) ?></td>
-      </tr>
-    </tfoot>
-  </table>
+      </tfoot>
+    </table>
+  </div>
 
-  <hr>
-  <p class="text-center text-muted small mb-0">Generated on <?= date('d-m-Y H:i') ?></p>
+  <div class="r-software">[Software By @ ATR]</div>
 
 </div>
 

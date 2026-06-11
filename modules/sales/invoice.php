@@ -22,18 +22,120 @@ $payments = $pay_stmt->fetchAll();
 $badge_map = ['paid'=>'success', 'partial'=>'warning', 'installment'=>'info'];
 $badge = $badge_map[$sale['payment_status']] ?? 'secondary';
 
+$total_paid = array_sum(array_map(fn($p) => (float)$p['amount'], $payments));
+
+// Customer total outstanding across all sales
+$customer_data = $pdo->query("SELECT opening_due, opening_paid FROM customers WHERE id = " . (int)$sale['customer_id'])->fetch();
+$opening_balance = (float)($customer_data['opening_due'] ?? 0) - (float)($customer_data['opening_paid'] ?? 0);
+$total_sales_all = (float)$pdo->query("SELECT COALESCE(SUM(total_amount + COALESCE(interest_amount, 0)), 0) FROM sales WHERE customer_id = " . (int)$sale['customer_id'] . " AND status != 'cancelled'")->fetchColumn();
+$total_payments_all = (float)$pdo->query("SELECT COALESCE(SUM(amount), 0) FROM payments WHERE sale_id IN (SELECT id FROM sales WHERE customer_id = " . (int)$sale['customer_id'] . ")")->fetchColumn();
+$total_returns = (float)$pdo->query("SELECT COALESCE(SUM(amount), 0) FROM sale_returns WHERE customer_id = " . (int)$sale['customer_id'])->fetchColumn();
+$remaining = $opening_balance + $total_sales_all - $total_payments_all - $total_returns;
+
 $title = 'Invoice #' . htmlspecialchars($sale['invoice_no']);
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title><?=$title?></title>
+<title><?= $title ?></title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/4.6.2/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
 <style>
-  @media print{body{font-size:12px}.no-print{display:none!important}}
-  body{background:#f1f5f9;font-family:'Segoe UI',sans-serif}
-  .wrap{max-width:800px;margin:30px auto;background:#fff;border-radius:12px;padding:40px;box-shadow:0 4px 24px rgba(0,0,0,.08)}
+  @media print {
+      @page { size: A4; margin: 10mm; }
+      body { background:#fff; font-size:11px; }
+      .no-print { display:none !important; }
+      .receipt-box { box-shadow:none !important; border:1px solid #000 !important; max-width:100%; margin:0; }
+  }
+  body {
+      background:#f1f5f9;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      font-size:14px;
+  }
+  .receipt-box {
+      max-width: 720px;
+      margin: 30px auto;
+      background:#fff;
+      border: 2px solid #1f2937;
+      border-radius: 4px;
+      padding: 0;
+      box-shadow: 0 4px 24px rgba(0,0,0,.08);
+  }
+  .r-header {
+      display:flex; align-items:center; gap:14px;
+      padding: 14px 18px 8px 18px;
+      border-bottom: 2px solid #1f2937;
+  }
+  .r-logo {
+      width:60px; height:60px;
+      border:3px solid #4b5563; border-radius:50%;
+      display:flex; align-items:center; justify-content:center;
+      font-weight:bold; font-size:1.4rem; color:#374151;
+      flex-shrink:0;
+  }
+  .r-company-name { font-size:1.6rem; font-weight:700; margin:0; color:#1f2937; }
+  .r-company-sub { font-size:.85rem; font-weight:600; letter-spacing:.03em; margin:0; color:#1f2937; }
+  .r-company-contact { font-size:.7rem; color:#374151; margin:0; }
+  .r-meta {
+      display:flex; justify-content:space-between;
+      padding: 6px 18px; font-size:.8rem; font-weight:600;
+      border-bottom: 1px solid #1f2937;
+  }
+  .r-section-title {
+      font-size:.95rem; font-weight:700;
+      padding: 8px 18px;
+      border-bottom: 1px solid #1f2937;
+      text-decoration: underline; text-underline-offset: 3px;
+  }
+  .r-row {
+      display:flex; flex-wrap:wrap;
+      padding: 8px 18px;
+      border-bottom: 1px solid #1f2937;
+      font-size:.95rem; gap: 6px 24px;
+  }
+  .r-row .r-field { display:flex; gap:6px; }
+  .r-row .r-field .lbl { font-weight:700; }
+  .r-row .r-field .val { font-weight:400; }
+  .r-table {
+      width:100%; border-collapse:collapse; font-size:.85rem;
+  }
+  .r-table th, .r-table td {
+      border:1px solid #1f2937; padding:6px 8px; text-align:center;
+  }
+  .r-table th { font-weight:700; }
+  .r-balance-row {
+      display:flex; justify-content:space-between;
+      padding: 12px 18px;
+      border-bottom: 1px solid #1f2937;
+      font-size:1rem; font-weight:700;
+  }
+  .r-balance-row .current { font-size:1.15rem; color:#dc2626; }
+  .r-fin-row {
+      display:flex; flex-wrap:wrap; justify-content:space-between;
+      padding: 8px 18px;
+      border-bottom: 1px solid #1f2937;
+      font-size:.9rem; gap: 4px 20px;
+  }
+  .r-fin-row .r-field { display:flex; gap:6px; }
+  .r-fin-row .r-field .lbl { font-weight:700; }
+  .r-fin-row .r-field .val { font-weight:400; }
+  .r-sign-row {
+      display:flex; justify-content:space-between; align-items:flex-end;
+      padding: 24px 18px 10px 18px;
+      border-bottom: 1px solid #1f2937;
+      font-size:.9rem; font-weight:600;
+      min-height:50px;
+  }
+  .r-thanks {
+      text-align:center; font-weight:700; text-decoration:underline;
+      padding: 8px 18px; font-size:.95rem;
+      border-bottom: 1px solid #e5e7eb;
+  }
+  .r-software {
+      text-align:left; font-size:.7rem; color:#9ca3af;
+      padding: 6px 18px 14px 18px;
+  }
 </style>
 </head>
 <body>
@@ -43,100 +145,122 @@ $title = 'Invoice #' . htmlspecialchars($sale['invoice_no']);
   <a href="invoices.php" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
 </div>
 
-<div class="wrap">
+<div class="receipt-box">
 
-  <div class="d-flex justify-content-between align-items-start mb-4">
+  <!-- Header -->
+  <div class="r-header">
+    <div class="r-logo">SHT</div>
     <div>
-      <h3 class="font-weight-bold mb-1" style="color:#0f172a;">Installment Business</h3>
-      <p class="text-muted mb-0">POS System</p>
-    </div>
-    <div class="text-right">
-      <h4 class="font-weight-bold mb-1" style="color:#0f172a;">INVOICE</h4>
-      <p class="mb-0"><strong>#<?=htmlspecialchars($sale['invoice_no'])?></strong></p>
-      <p class="mb-0 text-muted"><?=formatDate($sale['sale_date'])?></p>
-      <span class="badge badge-<?=$badge?> px-3 py-1 mt-1"><?=ucfirst($sale['payment_status'])?></span>
+      <p class="r-company-name">Saim Hasnain Traders</p>
+      <p class="r-company-sub">CHAK NUM 14/8AR Talambah Road Mia Chanu</p>
+      <p class="r-company-contact">Phone: Mahar Falak 03030344214 / Mahar Shahid 03346881214</p>
     </div>
   </div>
 
-  <hr>
-
-  <div class="row mb-4">
-    <div class="col-sm-6">
-      <h6 class="font-weight-bold text-uppercase" style="color:#0f172a;font-size:.8rem;">Bill To</h6>
-      <p class="mb-1 font-weight-bold"><?=htmlspecialchars($customer['full_name']??'N/A')?></p>
-      <p class="mb-1 text-muted"><?=htmlspecialchars($customer['phone']??'')?></p>
-      <p class="mb-0 text-muted"><?=nl2br(htmlspecialchars($customer['address']??''))?></p>
-    </div>
-    <div class="col-sm-6 text-sm-right">
-      <h6 class="font-weight-bold text-uppercase" style="color:#0f172a;font-size:.8rem;">Payment</h6>
-      <p class="mb-1"><?=ucfirst(str_replace('_',' ',$sale['payment_method']))?></p>
-    </div>
+  <!-- Date / Invoice No -->
+  <div class="r-meta">
+    <span>Invoice #: <?= htmlspecialchars($sale['invoice_no']) ?></span>
+    <span>Date: <?= date('n/j/Y', strtotime($sale['sale_date'])) ?></span>
   </div>
 
-  <table class="table table-bordered">
-    <thead class="thead-dark">
-      <tr><th class="text-center" style="width:40px;">#</th><th>Product</th><th class="text-center" style="width:60px;">Qty</th><th class="text-right" style="width:120px;">Price</th><th class="text-right" style="width:120px;">Total</th></tr>
-    </thead>
-    <tbody>
-      <?php $i=1; foreach($items as $item):
-        $prodName = $item['item_description'] ?: (($p = getById('products', $item['product_id'])) ? $p['name'] : 'Item');
-        $prodCode = $item['item_description'] ? '' : (($p ?? null) ? ($p['code']??'') : '');
-      ?>
-      <tr>
-        <td class="text-center"><?=$i++?></td>
-        <td><?=htmlspecialchars($prodName)?> <?php if ($prodCode): ?><small class="text-muted d-block"><?=htmlspecialchars($prodCode)?></small><?php endif; ?></td>
-        <td class="text-center"><?=$item['quantity']?></td>
-        <td class="text-right"><?=formatCurrency($item['price'])?></td>
-        <td class="text-right"><?=formatCurrency($item['subtotal'])?></td>
-      </tr>
-      <?php endforeach; ?>
-    </tbody>
-  </table>
+  <!-- Customer Information -->
+  <div class="r-section-title">Customer Information</div>
+  <div class="r-row">
+    <div class="r-field"><span class="lbl">Name:</span><span class="val"><?= htmlspecialchars($customer['full_name'] ?? 'N/A') ?></span></div>
+    <div class="r-field"><span class="lbl">Phone:</span><span class="val"><?= htmlspecialchars($customer['phone'] ?? '') ?></span></div>
+    <div class="r-field" style="width:100%;"><span class="lbl">Address:</span><span class="val"><?= nl2br(htmlspecialchars($customer['address'] ?? '')) ?></span></div>
+    <div class="r-field"><span class="lbl">CNIC:</span><span class="val"><?= htmlspecialchars($customer['cnic'] ?? 'N/A') ?></span></div>
+  </div>
 
-  <div class="row">
-    <div class="col-sm-6">
-      <?php if($discount): ?><p class="mb-1"><strong>Discount:</strong> <?=htmlspecialchars($discount['name'])?> (<?=$discount['discount_type']==='percentage'?$discount['discount_value'].'%':formatCurrency($discount['discount_value'])?>)</p><?php endif; ?>
-      <?php if($sale['notes']): ?><p class="mb-0"><strong>Notes:</strong> <?=nl2br(htmlspecialchars($sale['notes']))?></p><?php endif; ?>
-    </div>
-    <div class="col-sm-6">
-      <table class="table table-sm table-borderless text-right mb-0">
-        <tr><td style="width:60%;">Subtotal</td><td style="width:40%;"><strong><?=formatCurrency($sale['subtotal'])?></strong></td></tr>
-        <?php if(($sale['discount_amount']??0)>0): ?><tr><td class="text-danger">Discount</td><td class="text-danger">-<?=formatCurrency($sale['discount_amount'])?></td></tr><?php endif; ?>
-        <tr class="font-weight-bold" style="font-size:1.15rem;"><td>Total</td><td style="color:#0f172a;"><?=formatCurrency($sale['total_amount'])?></td></tr>
-        <tr><td>Down Payment</td><td><?=formatCurrency($sale['down_payment'])?></td></tr>
-        <tr class="font-weight-bold text-primary"><td>Financed</td><td><?=formatCurrency($sale['financed_amount'])?></td></tr>
-        <tr><td>Interest Rate</td><td><?= htmlspecialchars($sale['interest_rate'] ?? '0') ?>%</td></tr>
-        <tr><td>Interest Amount</td><td class="text-danger"><?= formatCurrency($sale['interest_amount'] ?? 0) ?></td></tr>
-        <tr class="font-weight-bold" style="color:#0f172a;"><td>Total Payable (Financed + Interest)</td><td><?= formatCurrency((float)$sale['financed_amount'] + (float)($sale['interest_amount'] ?? 0)) ?></td></tr>
-        <tr><td>Monthly Installment</td><td><?= formatCurrency($sale['monthly_installment'] ?? 0) ?></td></tr>
-        <tr><td>Number of Installments</td><td><?= (int)($sale['total_installments'] ?? 0) ?></td></tr>
-        <?php
-        $total_paid = array_sum(array_map(fn($p) => (float)$p['amount'], $payments));
-        $remaining = max(0, (float)$sale['total_amount'] + (float)($sale['interest_amount'] ?? 0) - $total_paid);
+  <!-- Products Table -->
+  <div class="r-section-title">Products Detail</div>
+  <div style="padding:8px 18px;">
+    <table class="r-table">
+      <thead>
+        <tr>
+          <th width="5%">#</th>
+          <th width="40%">Product</th>
+          <th width="10%">Qty</th>
+          <th width="20%">Price</th>
+          <th width="15%">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        <?php $i=1; foreach($items as $item):
+          $prodName = $item['item_description'] ?: (($p = getById('products', $item['product_id'])) ? $p['name'] : 'Item');
+          $prodCode = $item['item_description'] ? '' : (($p ?? null) ? ($p['code']??'') : '');
         ?>
-        <tr><td>Total Paid</td><td class="text-success font-weight-bold"><?=formatCurrency($total_paid)?></td></tr>
-        <tr class="<?=$remaining>0?'text-danger font-weight-bold':''?>"><td>Remaining</td><td><?=formatCurrency($remaining)?></td></tr>
+        <tr>
+          <td><?=$i++?></td>
+          <td class="text-left"><?=htmlspecialchars($prodName)?> <?php if ($prodCode): ?><br><small><?=htmlspecialchars($prodCode)?></small><?php endif; ?></td>
+          <td><?=$item['quantity']?></td>
+          <td><?=formatCurrency($item['price'])?></td>
+          <td><?=formatCurrency($item['subtotal'])?></td>
+        </tr>
+        <?php endforeach; ?>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Financial Summary -->
+  <div class="r-section-title">Payment Summary</div>
+  <div class="r-fin-row">
+    <div class="r-field"><span class="lbl">Subtotal:</span><span class="val"><?= formatCurrency($sale['subtotal']) ?></span></div>
+    <?php if (($sale['discount_amount'] ?? 0) > 0): ?>
+      <div class="r-field"><span class="lbl">Discount:</span><span class="val" style="color:#dc2626;">-<?= formatCurrency($sale['discount_amount']) ?></span></div>
+    <?php endif; ?>
+    <div class="r-field"><span class="lbl">Total:</span><span class="val"><?= formatCurrency($sale['total_amount']) ?></span></div>
+    <div class="r-field"><span class="lbl">Down Payment:</span><span class="val"><?= formatCurrency($sale['down_payment']) ?></span></div>
+    <div class="r-field"><span class="lbl">Financed:</span><span class="val"><?= formatCurrency($sale['financed_amount']) ?></span></div>
+    <div class="r-field"><span class="lbl">Interest Rate:</span><span class="val"><?= htmlspecialchars($sale['interest_rate'] ?? '0') ?>%</span></div>
+    <div class="r-field"><span class="lbl">Interest Amount:</span><span class="val" style="color:#dc2626;"><?= formatCurrency($sale['interest_amount'] ?? 0) ?></span></div>
+    <div class="r-field"><span class="lbl">Total Payable (Financed + Interest):</span><span class="val" style="font-weight:700;"><?= formatCurrency((float)$sale['financed_amount'] + (float)($sale['interest_amount'] ?? 0)) ?></span></div>
+    <div class="r-field"><span class="lbl">Monthly Installment:</span><span class="val"><?= formatCurrency($sale['monthly_installment'] ?? 0) ?></span></div>
+    <div class="r-field"><span class="lbl">Number of Installments:</span><span class="val"><?= (int)($sale['total_installments'] ?? 0) ?></span></div>
+    <div class="r-field"><span class="lbl">Total Paid (This Sale):</span><span class="val" style="color:#16a34a;"><?= formatCurrency($total_paid) ?></span></div>
+  </div>
+
+  <!-- Balance Row -->
+  <div class="r-balance-row">
+    <span>Previous Balance = <?= formatCurrency($opening_balance) ?></span>
+    <span>Total Paid = <?= formatCurrency($total_paid) ?></span>
+    <span class="current">Remaining Balance = <?= formatCurrency($remaining) ?></span>
+  </div>
+
+  <!-- Payment History -->
+  <?php if ($payments): ?>
+    <div class="r-section-title">Payment History</div>
+    <div style="padding:8px 18px;">
+      <table class="r-table">
+        <thead>
+          <tr><th>Date</th><th>Amount</th><th>Method</th><th>Type</th></tr>
+        </thead>
+        <tbody>
+          <?php foreach ($payments as $p): ?>
+            <tr>
+              <td><?= formatDate($p['payment_date']) ?></td>
+              <td><?= formatCurrency($p['amount']) ?></td>
+              <td><?= ucfirst($p['payment_method']) ?></td>
+              <td><?= ucfirst(str_replace('_', ' ', $p['payment_type'])) ?></td>
+            </tr>
+          <?php endforeach; ?>
+        </tbody>
       </table>
     </div>
-  </div>
-
-  <?php if($payments): ?>
-  <hr>
-  <h6 class="font-weight-bold text-uppercase" style="color:#0f172a;font-size:.8rem;">Payment History</h6>
-  <table class="table table-sm table-bordered">
-    <thead class="thead-light">
-      <tr><th>Date</th><th class="text-right">Amount</th><th>Method</th><th>Type</th></tr>
-    </thead>
-    <tbody>
-      <?php foreach($payments as $p): ?>
-      <tr><td><?=formatDate($p['payment_date'])?></td><td class="text-right"><?=formatCurrency($p['amount'])?></td><td><?=ucfirst($p['payment_method'])?></td><td><?=ucfirst(str_replace('_',' ',$p['payment_type']))?></td></tr>
-      <?php endforeach; ?>
-    </tbody>
-  </table>
   <?php endif; ?>
 
-  <hr>
-  <p class="text-center text-muted small mb-0">Thank you for your business!</p>
+  <!-- Signatures -->
+  <div class="r-sign-row">
+    <span>Customer Signature</span>
+    <span>Salesman Signature</span>
+    <span>Manager Signature/Stamp</span>
+  </div>
+
+  <!-- Thanks -->
+  <div class="r-thanks">[Thanks For Visiting:::Saim Hasnain Traders]</div>
+
+  <!-- Software credit -->
+  <div class="r-software">[Software By @ ATR]</div>
 
 </div>
 

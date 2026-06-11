@@ -140,14 +140,19 @@ body {
   padding: 1rem 1.25rem;
   color: #fff;
   text-decoration: none;
-  font-size: 1.05rem;
+  font-size: 0.95rem;
   font-weight: 700;
   border-bottom: 1px solid rgba(255,255,255,0.06);
-  white-space: nowrap;
   transition: padding 0.3s;
 }
 
 .sidebar-brand:hover { color: var(--sidebar-active); text-decoration: none; }
+
+.sidebar-brand-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 .sidebar-brand-icon {
   width: 36px;

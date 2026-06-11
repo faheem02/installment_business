@@ -39,24 +39,95 @@ $supplier_name = $supplier ? htmlspecialchars(($supplier['contact_person'] ?? ''
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title><?=$title?></title>
+<title><?= $title ?></title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/4.6.2/css/bootstrap.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
 <style>
-  @media print{body{font-size:12px}.no-print{display:none!important}}
-  body{background:#f1f5f9;font-family:'Segoe UI',sans-serif}
-  .wrap{max-width:800px;margin:30px auto;background:#fff;border-radius:12px;padding:35px;box-shadow:0 4px 24px rgba(0,0,0,.08)}
-  .receipt-header{border-bottom:2px dashed #e2e8f0;padding-bottom:20px;margin-bottom:20px}
-  .receipt-footer{border-top:2px dashed #e2e8f0;padding-top:20px;margin-top:20px}
-  .amount-box{background:#f8fafc;border-radius:8px;padding:15px;text-align:center;border:2px solid #e2e8f0}
-  .amount-box .amount{font-size:2rem;font-weight:bold;color:#007bff}
-  table.details{width:100%}
-  table.details td{padding:6px 10px}
-  table.details td:first-child{color:#64748b;width:40%}
-  table.details td:last-child{font-weight:600;width:60%}
-  table.items{width:100%;border-collapse:collapse;margin-top:15px}
-  table.items th, table.items td{border:1px solid #e2e8f0;padding:8px 10px;text-align:center}
-  table.items th{background:#f8fafc;color:#475569;font-size:13px}
+  @media print {
+      @page { size: A4; margin: 10mm; }
+      body { background:#fff; font-size:11px; }
+      .no-print { display:none !important; }
+      .receipt-box { box-shadow:none !important; border:1px solid #000 !important; max-width:100%; margin:0; }
+  }
+  body {
+      background:#f1f5f9;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      font-size:14px;
+  }
+  .receipt-box {
+      max-width: 720px;
+      margin: 30px auto;
+      background:#fff;
+      border: 2px solid #1f2937;
+      border-radius: 4px;
+      padding: 0;
+      box-shadow: 0 4px 24px rgba(0,0,0,.08);
+  }
+  .r-header {
+      display:flex; align-items:center; gap:14px;
+      padding: 14px 18px 8px 18px;
+      border-bottom: 2px solid #1f2937;
+  }
+  .r-logo {
+      width:60px; height:60px;
+      border:3px solid #4b5563; border-radius:50%;
+      display:flex; align-items:center; justify-content:center;
+      font-weight:bold; font-size:1.4rem; color:#374151;
+      flex-shrink:0;
+  }
+  .r-company-name { font-size:1.6rem; font-weight:700; margin:0; color:#1f2937; }
+  .r-company-sub { font-size:.85rem; font-weight:600; letter-spacing:.03em; margin:0; color:#1f2937; }
+  .r-company-contact { font-size:.7rem; color:#374151; margin:0; }
+  .r-meta {
+      display:flex; justify-content:space-between;
+      padding: 6px 18px; font-size:.8rem; font-weight:600;
+      border-bottom: 1px solid #1f2937;
+  }
+  .r-section-title {
+      font-size:.95rem; font-weight:700;
+      padding: 8px 18px;
+      border-bottom: 1px solid #1f2937;
+      text-decoration: underline; text-underline-offset: 3px;
+  }
+  .r-row {
+      display:flex; flex-wrap:wrap;
+      padding: 8px 18px;
+      border-bottom: 1px solid #1f2937;
+      font-size:.95rem; gap: 6px 24px;
+  }
+  .r-row .r-field { display:flex; gap:6px; }
+  .r-row .r-field .lbl { font-weight:700; }
+  .r-row .r-field .val { font-weight:400; }
+  .r-table {
+      width:100%; border-collapse:collapse; font-size:.85rem;
+  }
+  .r-table th, .r-table td {
+      border:1px solid #1f2937; padding:6px 10px; text-align:center;
+  }
+  .r-table th { font-weight:700; }
+  .r-balance-row {
+      display:flex; justify-content:space-between;
+      padding: 12px 18px;
+      border-bottom: 1px solid #1f2937;
+      font-size:1rem; font-weight:700;
+  }
+  .r-balance-row .current { font-size:1.15rem; color:#dc2626; }
+  .r-sign-row {
+      display:flex; justify-content:space-between; align-items:flex-end;
+      padding: 24px 18px 10px 18px;
+      border-bottom: 1px solid #1f2937;
+      font-size:.9rem; font-weight:600;
+      min-height:50px;
+  }
+  .r-thanks {
+      text-align:center; font-weight:700; text-decoration:underline;
+      padding: 8px 18px; font-size:.95rem;
+      border-bottom: 1px solid #e5e7eb;
+  }
+  .r-software {
+      text-align:left; font-size:.7rem; color:#9ca3af;
+      padding: 6px 18px 14px 18px;
+  }
 </style>
 </head>
 <body>
@@ -66,108 +137,135 @@ $supplier_name = $supplier ? htmlspecialchars(($supplier['contact_person'] ?? ''
   <button class="btn btn-secondary" onclick="window.close()"><i class="fas fa-times"></i> Close</button>
 </div>
 
-<div class="wrap">
+<div class="receipt-box">
 
-  <div class="receipt-header">
-    <div class="d-flex justify-content-between align-items-start">
-      <div>
-        <h4 class="font-weight-bold mb-1" style="color:#0f172a;">Installment Business</h4>
-        <p class="text-muted mb-0">POS System</p>
-      </div>
-      <div class="text-right">
-        <h4 class="font-weight-bold mb-1" style="color:#007bff;">PURCHASE VOUCHER</h4>
-        <p class="mb-0"><strong><?= $voucher_no ?></strong></p>
-        <p class="mb-0 text-muted"><?= formatDate($purchase['purchase_date']) ?></p>
-      </div>
+  <!-- Header -->
+  <div class="r-header">
+    <div class="r-logo">SHT</div>
+    <div>
+      <p class="r-company-name">Saim Hasnain Traders</p>
+      <p class="r-company-sub">CHAK NUM 14/8AR Talambah Road Mia Chanu</p>
+      <p class="r-company-contact">Phone: Mahar Falak 03030344214 / Mahar Shahid 03346881214</p>
     </div>
   </div>
 
-  <div class="amount-box mb-4">
-    <p class="text-muted mb-1">Total Amount</p>
-    <div class="amount"><?= formatCurrency($purchase['total_amount']) ?></div>
-    <p class="mb-0 mt-2">
-      <span class="badge badge-<?= $purchase['status'] === 'received' ? 'success' : ($purchase['status'] === 'cancelled' ? 'danger' : 'warning') ?> px-3 py-1">
-        <?= ucfirst($purchase['status']) ?>
-      </span>
-    </p>
+  <!-- Date / Voucher No -->
+  <div class="r-meta">
+    <span>Voucher #: <?= $voucher_no ?></span>
+    <span>Date: <?= date('n/j/Y', strtotime($purchase['purchase_date'])) ?></span>
   </div>
 
-  <table class="details">
-    <tr><td>Supplier</td><td><?= $supplier_name ?></td></tr>
-    <tr><td>Invoice No</td><td><?= htmlspecialchars($purchase['invoice_no'] ?? 'N/A') ?></td></tr>
+  <!-- Supplier Information -->
+  <div class="r-section-title">Supplier Information</div>
+  <div class="r-row">
+    <div class="r-field"><span class="lbl">Supplier:</span><span class="val"><?= $supplier_name ?></span></div>
+    <div class="r-field"><span class="lbl">Invoice No:</span><span class="val"><?= htmlspecialchars($purchase['invoice_no'] ?? 'N/A') ?></span></div>
+  </div>
+
+  <!-- Items Table -->
+  <div class="r-section-title">Purchase Items</div>
+  <?php if (!empty($items_data)): ?>
+    <div style="padding:8px 18px;">
+      <table class="r-table">
+        <thead>
+          <tr>
+            <th width="8%">#</th>
+            <th width="42%">Product</th>
+            <th width="15%">Qty</th>
+            <th width="20%">Price</th>
+            <th width="15%">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php $i = 1; foreach ($items_data as $item): ?>
+            <tr>
+              <td><?= $i++ ?></td>
+              <td class="text-left"><?= htmlspecialchars($item['product_name'] ?? $item['product_code'] ?? 'Item #' . $item['product_id']) ?></td>
+              <td><?= $item['quantity'] ?></td>
+              <td><?= formatCurrency($item['purchase_price']) ?></td>
+              <td><?= formatCurrency($item['subtotal']) ?></td>
+            </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+  <?php endif; ?>
+
+  <!-- Serials Table -->
+  <?php if (!empty($serials_data)):
+    $first_type = $serials_data[0]['product_type'] ?? 'general';
+  ?>
+    <div style="padding:8px 18px; border-top:1px solid #1f2937;">
+      <table class="r-table">
+        <thead>
+          <tr>
+            <th width="5%">#</th>
+            <th width="35%">Product</th>
+            <?php if ($first_type === 'mobile'): ?>
+              <th width="60%">IMEI Number</th>
+            <?php elseif ($first_type === 'bike'): ?>
+              <th width="20%">Engine No.</th>
+              <th width="20%">Chassis No.</th>
+              <th width="20%">Color</th>
+            <?php else: ?>
+              <th width="60%">Serial / Identifier</th>
+            <?php endif; ?>
+          </tr>
+        </thead>
+        <tbody>
+          <?php $i = 1; foreach ($serials_data as $s): $type = $s['product_type']; ?>
+            <tr>
+              <td><?= $i++ ?></td>
+              <td class="text-left"><?= htmlspecialchars($s['product_name'] ?? $s['product_code']) ?></td>
+              <?php if ($type === 'mobile'): ?>
+                <td class="text-left"><?= htmlspecialchars($s['imei_number'] ?? '-') ?></td>
+              <?php elseif ($type === 'bike'):
+                $notes = $s['notes'] ?? '';
+                $color = '';
+                $chassis = '';
+                if (preg_match('/^Bike\s+(.*?)\s*-\s*(.*)$/', $notes, $m)) {
+                    $color = trim($m[1]);
+                    $chassis = trim($m[2]);
+                } else {
+                    $chassis = $notes;
+                }
+              ?>
+                <td><?= htmlspecialchars($s['serial_number'] ?? '-') ?></td>
+                <td><?= htmlspecialchars($chassis ?: '-') ?></td>
+                <td><?= htmlspecialchars($color ?: '-') ?></td>
+              <?php else: ?>
+                <td class="text-left"><?= htmlspecialchars($s['serial_number'] ?? $s['imei_number'] ?? '-') ?></td>
+              <?php endif; ?>
+            </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+  <?php endif; ?>
+
+  <!-- Balance Row -->
+  <div class="r-balance-row">
+    <span>Total Amount = <?= formatCurrency($purchase['total_amount']) ?></span>
     <?php if ($purchase['paid_amount'] > 0): ?>
-      <tr><td>Paid Amount</td><td><?= formatCurrency($purchase['paid_amount']) ?></td></tr>
+      <span class="text-success">Paid = <?= formatCurrency($purchase['paid_amount']) ?></span>
     <?php endif; ?>
     <?php if ($purchase['due_amount'] > 0): ?>
-      <tr><td>Due Amount</td><td><?= formatCurrency($purchase['due_amount']) ?></td></tr>
+      <span class="current">Due = <?= formatCurrency($purchase['due_amount']) ?></span>
     <?php endif; ?>
-    <?php if ($purchase['notes']): ?>
-      <tr><td>Notes</td><td><?= nl2br(htmlspecialchars($purchase['notes'])) ?></td></tr>
-    <?php endif; ?>
-  </table>
-
-  <?php if (!empty($items_data)): ?>
-    <table class="items">
-      <thead>
-        <tr>
-          <th width="10%">#</th>
-          <th width="40%">Product</th>
-          <th width="15%">Qty</th>
-          <th width="20%">Price</th>
-          <th width="15%">Total</th>
-        </tr>
-      </thead>
-      <tbody>
-        <?php $i = 1; foreach ($items_data as $item): ?>
-          <tr>
-            <td><?= $i++ ?></td>
-            <td class="text-left"><?= htmlspecialchars($item['product_name'] ?? $item['product_code'] ?? 'Item #' . $item['product_id']) ?></td>
-            <td><?= $item['quantity'] ?></td>
-            <td><?= formatCurrency($item['purchase_price']) ?></td>
-            <td><?= formatCurrency($item['subtotal']) ?></td>
-          </tr>
-        <?php endforeach; ?>
-        <tr class="font-weight-bold" style="background:#f8f9fc;">
-          <td colspan="4" class="text-right">Total</td>
-          <td><?= formatCurrency($purchase['total_amount']) ?></td>
-        </tr>
-      </tbody>
-    </table>
-  <?php endif; ?>
-
-  <?php if (!empty($serials_data)): ?>
-    <table class="items mt-3">
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Product</th>
-          <th>Serial / IMEI / Engine / Chassis</th>
-        </tr>
-      </thead>
-      <tbody>
-        <?php $i = 1; foreach ($serials_data as $s): $type = $s['product_type']; ?>
-          <tr>
-            <td><?= $i++ ?></td>
-            <td class="text-left"><?= htmlspecialchars($s['product_name'] ?? $s['product_code']) ?></td>
-            <td class="text-left">
-              <?php if ($type === 'mobile'): ?>
-                IMEI: <?= htmlspecialchars($s['imei_number'] ?? '-') ?>
-              <?php elseif ($type === 'bike'): ?>
-                Eng: <?= htmlspecialchars($s['serial_number'] ?? '-') ?> / Chassis: <?= htmlspecialchars($s['notes'] ?? '-') ?>
-              <?php else: ?>
-                <?= htmlspecialchars($s['serial_number'] ?? $s['imei_number'] ?? '-') ?>
-              <?php endif; ?>
-            </td>
-          </tr>
-        <?php endforeach; ?>
-      </tbody>
-    </table>
-  <?php endif; ?>
-
-  <div class="receipt-footer text-center">
-    <p class="text-muted small mb-1">Purchase recorded on <?= formatDate($purchase['created_at']) ?></p>
-    <p class="text-muted small mb-0">This is a computer-generated voucher.</p>
   </div>
+
+  <!-- Signatures -->
+  <div class="r-sign-row">
+    <span>Received By</span>
+    <span>Supplier Signature</span>
+    <span>Manager Signature/Stamp</span>
+  </div>
+
+  <!-- Thanks -->
+  <div class="r-thanks">[Thanks For Visiting:::Saim Hasnain Traders]</div>
+
+  <!-- Software credit -->
+  <div class="r-software">[Software By @ ATR ]</div>
 
 </div>
 

@@ -7,13 +7,17 @@ require_once '../../includes/functions.php';
 $stmt = $pdo->prepare("
     SELECT p.*, s.invoice_no, s.sale_date, s.total_amount, s.down_payment, s.financed_amount,
            s.interest_rate, s.interest_amount,
-           s.total_installments, s.payment_status AS sale_status,
-           c.full_name AS customer_name, c.phone AS customer_phone, c.address AS customer_address,
-           c.cnic AS customer_cnic,
+           s.total_installments, s.payment_status AS sale_status, s.discount_amount,
+           c.id AS account_no, c.full_name AS customer_name, c.phone AS customer_phone,
+           c.address AS customer_address, c.cnic AS customer_cnic,
            u.full_name AS received_by_name,
            b.name AS branch_name,
            si.installment_no, si.due_date, si.amount AS inst_amount, si.balance AS inst_balance,
-           si.status AS inst_status, si.late_fee
+           si.status AS inst_status, si.late_fee,
+           (SELECT GROUP_CONCAT(DISTINCT COALESCE(pr.name, sit.item_description) SEPARATOR ', ')
+            FROM sale_items sit
+            LEFT JOIN products pr ON pr.id = sit.product_id
+            WHERE sit.sale_id = s.id) AS product_names
     FROM payments p
     LEFT JOIN sales s ON p.sale_id = s.id
     LEFT JOIN customers c ON s.customer_id = c.id
@@ -21,6 +25,7 @@ $stmt = $pdo->prepare("
     LEFT JOIN branches b ON p.branch_id = b.id
     LEFT JOIN sale_installments si ON p.installment_id = si.id
     WHERE p.id = ?
+    LIMIT 1
 ");
 $stmt->execute([$id]);
 $payment = $stmt->fetch();
@@ -31,6 +36,27 @@ if (!$payment) {
     exit;
 }
 
+// Get customer ID from the sale
+$customer_id = $payment['customer_id'] ?? null;
+if (!$customer_id) {
+    $cs = $pdo->query("SELECT customer_id FROM sales WHERE id = " . (int)$payment['sale_id'])->fetch();
+    $customer_id = $cs['customer_id'] ?? 0;
+}
+
+// Calculate customer's total outstanding
+$customer_data = $pdo->query("SELECT opening_due, opening_paid FROM customers WHERE id = " . (int)$customer_id)->fetch();
+$opening_balance = (float)($customer_data['opening_due'] ?? 0) - (float)($customer_data['opening_paid'] ?? 0);
+
+$total_sales = (float)$pdo->query("SELECT COALESCE(SUM(total_amount + COALESCE(interest_amount, 0)), 0) FROM sales WHERE customer_id = " . (int)$customer_id . " AND status != 'cancelled'")->fetchColumn();
+$total_payments = (float)$pdo->query("SELECT COALESCE(SUM(amount), 0) FROM payments WHERE sale_id IN (SELECT id FROM sales WHERE customer_id = " . (int)$customer_id . ")")->fetchColumn();
+$total_returns = (float)$pdo->query("SELECT COALESCE(SUM(amount), 0) FROM sale_returns WHERE customer_id = " . (int)$customer_id)->fetchColumn();
+
+$outstanding_after  = $opening_balance + $total_sales - $total_payments - $total_returns;
+$outstanding_before = $outstanding_after + (float)$payment['amount'];
+
+$has_installment = $payment['installment_id'] && $payment['inst_balance'] !== null;
+$inst_amount     = $has_installment ? (float)$payment['inst_amount'] : (float)$payment['total_amount'];
+
 $receipt_no = 'RCT-' . str_pad($payment['id'], 5, '0', STR_PAD_LEFT);
 $title = 'Receipt ' . $receipt_no;
 ?>
@@ -38,21 +64,129 @@ $title = 'Receipt ' . $receipt_no;
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title><?=$title?></title>
+<title><?= $title ?></title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/4.6.2/css/bootstrap.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
 <style>
-  @media print{body{font-size:12px}.no-print{display:none!important}}
-  body{background:#f1f5f9;font-family:'Segoe UI',sans-serif}
-  .wrap{max-width:700px;margin:30px auto;background:#fff;border-radius:12px;padding:35px;box-shadow:0 4px 24px rgba(0,0,0,.08)}
-  .receipt-header{border-bottom:2px dashed #e2e8f0;padding-bottom:20px;margin-bottom:20px}
-  .receipt-footer{border-top:2px dashed #e2e8f0;padding-top:20px;margin-top:20px}
-  .amount-box{background:#f8fafc;border-radius:8px;padding:15px;text-align:center;border:2px solid #e2e8f0}
-  .amount-box .amount{font-size:2rem;font-weight:bold;color:#0f172a}
-  table.details{width:100%}
-  table.details td{padding:6px 10px}
-  table.details td:first-child{color:#64748b;width:40%}
-  table.details td:last-child{font-weight:600;width:60%}
+  @media print {
+      @page { size: A4; margin: 10mm; }
+      body { background:#fff; font-size:11px; }
+      .no-print { display:none !important; }
+      .receipt-box { box-shadow:none !important; border:1px solid #000 !important; max-width:100%; margin:0; }
+  }
+  body {
+      background:#f1f5f9;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      font-size:14px;
+  }
+  .receipt-box {
+      max-width: 720px;
+      margin: 30px auto;
+      background:#fff;
+      border: 2px solid #1f2937;
+      border-radius: 4px;
+      padding: 0;
+      box-shadow: 0 4px 24px rgba(0,0,0,.08);
+  }
+  .r-header {
+      display:flex;
+      align-items:center;
+      gap:14px;
+      padding: 14px 18px 8px 18px;
+      border-bottom: 2px solid #1f2937;
+  }
+  .r-logo {
+      width:60px; height:60px;
+      border:3px solid #4b5563;
+      border-radius:50%;
+      display:flex; align-items:center; justify-content:center;
+      font-weight:bold; font-size:1.4rem; color:#374151;
+      flex-shrink:0;
+  }
+  .r-company-name {
+      font-size:1.6rem;
+      font-weight:700;
+      margin:0;
+      color:#1f2937;
+  }
+  .r-company-sub {
+      font-size:.85rem;
+      font-weight:600;
+      letter-spacing:.03em;
+      margin:0;
+      color:#1f2937;
+  }
+  .r-company-contact {
+      font-size:.7rem;
+      color:#374151;
+      margin:0;
+  }
+  .r-meta {
+      display:flex;
+      justify-content:space-between;
+      padding: 6px 18px;
+      font-size:.8rem;
+      font-weight:600;
+      border-bottom: 1px solid #1f2937;
+  }
+  .r-section-title {
+      font-size:.95rem;
+      font-weight:700;
+      padding: 8px 18px;
+      border-bottom: 1px solid #1f2937;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+  }
+  .r-row {
+      display:flex;
+      flex-wrap:wrap;
+      padding: 8px 18px;
+      border-bottom: 1px solid #1f2937;
+      font-size:.95rem;
+      gap: 6px 24px;
+  }
+  .r-row .r-field {
+      display:flex;
+      gap:6px;
+  }
+  .r-row .r-field .lbl { font-weight:700; }
+  .r-row .r-field .val { font-weight:400; }
+  .r-balance-row {
+      display:flex;
+      justify-content:space-between;
+      padding: 12px 18px;
+      border-bottom: 1px solid #1f2937;
+      font-size:1rem;
+      font-weight:700;
+  }
+  .r-balance-row .current {
+      font-size: 1.15rem;
+      color:#dc2626;
+  }
+  .r-sign-row {
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-end;
+      padding: 24px 18px 10px 18px;
+      border-bottom: 1px solid #1f2937;
+      font-size:.9rem;
+      font-weight:600;
+      min-height: 50px;
+  }
+  .r-thanks {
+      text-align:center;
+      font-weight:700;
+      text-decoration: underline;
+      padding: 8px 18px;
+      font-size:.95rem;
+      border-bottom: 1px solid #e5e7eb;
+  }
+  .r-software {
+      text-align:left;
+      font-size:.7rem;
+      color:#9ca3af;
+      padding: 6px 18px 14px 18px;
+  }
 </style>
 </head>
 <body>
@@ -62,97 +196,69 @@ $title = 'Receipt ' . $receipt_no;
   <a href="../../modules/installments/schedules.php" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back to Schedules</a>
 </div>
 
-<div class="wrap">
+<div class="receipt-box">
 
-  <div class="receipt-header">
-    <div class="d-flex justify-content-between align-items-start">
-      <div>
-        <h4 class="font-weight-bold mb-1" style="color:#0f172a;">Installment Business</h4>
-        <p class="text-muted mb-0">POS System</p>
-      </div>
-      <div class="text-right">
-        <h4 class="font-weight-bold mb-1" style="color:#0f172a;">RECEIPT</h4>
-        <p class="mb-0"><strong><?= $receipt_no ?></strong></p>
-        <p class="mb-0 text-muted"><?= formatDate($payment['payment_date']) ?></p>
-      </div>
+  <!-- Header -->
+  <div class="r-header">
+    <div class="r-logo">SHT</div>
+    <div>
+      <p class="r-company-name">Saim Hasnain Traders</p>
+      <p class="r-company-sub">CHAK NUM 14/8AR Talambah Road Mia Chanu</p>
+      <p class="r-company-contact">Phone: Mahar Falak 03030344214 / Mahar Shahid 03346881214</p>
     </div>
   </div>
 
-  <div class="row mb-4">
-    <div class="col-sm-6">
-      <h6 class="font-weight-bold text-uppercase" style="color:#0f172a;font-size:.8rem;">Customer</h6>
-      <p class="mb-1 font-weight-bold"><?= htmlspecialchars($payment['customer_name'] ?? 'N/A') ?></p>
-      <p class="mb-1 text-muted"><?= htmlspecialchars($payment['customer_phone'] ?? '') ?></p>
-      <p class="mb-0 text-muted"><?= nl2br(htmlspecialchars($payment['customer_address'] ?? '')) ?></p>
-    </div>
-    <div class="col-sm-6 text-sm-right">
-      <h6 class="font-weight-bold text-uppercase" style="color:#0f172a;font-size:.8rem;">Invoice</h6>
-      <p class="mb-1">#<?= htmlspecialchars($payment['invoice_no'] ?? 'N/A') ?></p>
-      <p class="mb-0 text-muted"><?= $payment['sale_date'] ? formatDate($payment['sale_date']) : '-' ?></p>
-    </div>
+  <!-- Date / Time
+  <div class="r-meta">
+    <span>Date: <= date('n/j/Y', strtotime($payment['payment_date'])) ?></span>
+    <span>Time: <= date('g:i A', strtotime($payment['payment_date'])) ?></span>
+  </div> -->
+
+  <!-- Customer Information -->
+  <div class="r-section-title">Customer Information</div>
+  <div class="r-row">
+    <div class="r-field"><span class="lbl">Account #</span><span class="val"><?= htmlspecialchars($payment['account_no'] ?? '-') ?></span></div>
+    <div class="r-field"><span class="lbl">Name:</span><span class="val"><?= htmlspecialchars($payment['customer_name'] ?? 'N/A') ?></span></div>
+    <div class="r-field"><span class="lbl">Phone:</span><span class="val"><?= htmlspecialchars($payment['customer_phone'] ?? '-') ?></span></div>
+  </div>
+  <div class="r-row">
+    <div class="r-field"><span class="lbl">CNIC:</span><span class="val"><?= htmlspecialchars($payment['customer_cnic'] ?: '00') ?></span></div>
+  </div>
+  <div class="r-row">
+    <div class="r-field"><span class="lbl">Address:</span><span class="val"><?= htmlspecialchars($payment['customer_address'] ?? '-') ?></span></div>
   </div>
 
-  <div class="amount-box mb-4">
-    <p class="text-muted mb-1">Amount Received</p>
-    <div class="amount"><?= formatCurrency($payment['amount']) ?></div>
-    <p class="mb-0 mt-2">
-      <span class="badge badge-<?= $payment['payment_method'] === 'cash' ? 'success' : 'info' ?> px-3 py-1">
-        <?= $payment['payment_method'] === 'cash' ? 'Cash' : 'Bank' ?>
-      </span>
-      <span class="badge badge-secondary px-3 py-1 ml-1">
-        <?= ucfirst(str_replace('_', ' ', $payment['payment_type'])) ?>
-      </span>
-    </p>
+  <!-- Product And Installments Detail -->
+  <div class="r-section-title">Product And Installments Detail</div>
+  <div class="r-row">
+    <div class="r-field"><span class="lbl">Products:</span><span class="val"><?= htmlspecialchars($payment['product_names'] ?? '-') ?></span></div>
+    <?php if ($has_installment): ?>
+      <div class="r-field"><span class="lbl">Installment #:</span><span class="val"><?= (int)$payment['installment_no'] ?> of <?= (int)$payment['total_installments'] ?></span></div>
+    <?php endif; ?>
+    <?php if ((float)($payment['discount_amount'] ?? 0) > 0): ?>
+      <div class="r-field"><span class="lbl">Discount:</span><span class="val text-danger">- <?= formatCurrency($payment['discount_amount']) ?></span></div>
+    <?php endif; ?>
   </div>
 
-  <table class="details">
-    <?php if ($payment['reference_no']): ?>
-      <tr><td>Reference No.</td><td><?= htmlspecialchars($payment['reference_no']) ?></td></tr>
-    <?php endif; ?>
-    <?php if ($payment['installment_id']): ?>
-      <tr><td>Installment</td><td>#<?= $payment['installment_no'] ?> of <?= $payment['total_installments'] ?: '-' ?></td></tr>
-      <tr><td>Due Date</td><td><?= formatDate($payment['due_date']) ?></td></tr>
-      <tr><td>Installment Amount</td><td><?= formatCurrency($payment['inst_amount']) ?></td></tr>
-      <?php if (($payment['late_fee'] ?? 0) > 0): ?>
-        <tr><td>Late Fee</td><td class="text-danger">+ <?= formatCurrency($payment['late_fee']) ?></td></tr>
-      <?php endif; ?>
-      <tr><td>Balance After Payment</td><td><?= formatCurrency($payment['inst_balance']) ?></td></tr>
-      <tr><td>Installment Status</td>
-        <td>
-          <?php
-          $inst_badge = match($payment['inst_status']) {
-            'paid' => 'success',
-            'partial' => 'warning',
-            'overdue', 'late' => 'danger',
-            default => 'secondary'
-          };
-          ?>
-          <span class="badge badge-<?= $inst_badge ?>"><?= ucfirst($payment['inst_status']) ?></span>
-        </td>
-      </tr>
-    <?php endif; ?>
-    <?php if ($payment['sale_id']): ?>
-      <tr><td>Total Sale Amount</td><td><?= formatCurrency($payment['total_amount']) ?></td></tr>
-      <tr><td>Financed Amount</td><td><?= formatCurrency($payment['financed_amount']) ?></td></tr>
-      <?php if ((float)$payment['interest_amount'] > 0): ?>
-        <tr><td>Interest Rate</td><td><?= htmlspecialchars($payment['interest_rate']) ?>%</td></tr>
-        <tr><td>Interest Amount</td><td class="text-danger"><?= formatCurrency($payment['interest_amount']) ?></td></tr>
-        <tr><td>Total Payable (Financed + Interest)</td><td class="font-weight-bold"><?= formatCurrency((float)$payment['financed_amount'] + (float)$payment['interest_amount']) ?></td></tr>
-      <?php endif; ?>
-    <?php endif; ?>
-    <?php if ($payment['notes']): ?>
-      <tr><td>Notes</td><td><?= nl2br(htmlspecialchars($payment['notes'])) ?></td></tr>
-    <?php endif; ?>
-    <tr><td>Received By</td><td><?= htmlspecialchars($payment['received_by_name'] ?? 'N/A') ?></td></tr>
-    <?php if ($payment['branch_name']): ?>
-      <tr><td>Branch</td><td><?= htmlspecialchars($payment['branch_name']) ?></td></tr>
-    <?php endif; ?>
-  </table>
-
-  <div class="receipt-footer text-center">
-    <p class="text-muted small mb-1">Thank you for your payment!</p>
-    <p class="text-muted small mb-0">This is a computer-generated receipt.</p>
+  <!-- Balance Row -->
+  <div class="r-balance-row">
+    <span>Previous Balance = <?= formatCurrency($outstanding_before) ?></span>
+    <span class="text-success">Installment Payment = <?= formatCurrency($payment['amount']) ?></span>
+    <span class="current">Remaining Balance = <?= formatCurrency($outstanding_after) ?></span>
   </div>
+
+  <!-- Signatures -->
+  <div class="r-sign-row">
+    <span>Customer Signature</span>
+    <span>Guarantor Signature:</span>
+    <span>Manager Signature/Stamp:</span>
+  </div>
+
+  <!-- Thanks -->
+  <div class="r-thanks">[Thanks For Visiting:::Saim Hasnain Traders]</div>
+
+  <!-- Software credit -->
+  <div class="r-software">[Software By @ ATR ]</div>
 
 </div>
 

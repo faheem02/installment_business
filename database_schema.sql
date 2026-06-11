@@ -176,6 +176,9 @@ CREATE TABLE products (
     imei_no_2       VARCHAR(100) DEFAULT NULL COMMENT 'Mobile IMEI 2 (dual SIM)',
     storage         VARCHAR(50) DEFAULT NULL COMMENT 'e.g. 64GB, 128GB',
     ram             VARCHAR(50) DEFAULT NULL COMMENT 'e.g. 4GB, 6GB, 8GB',
+    processor       VARCHAR(100) DEFAULT NULL COMMENT 'e.g. Intel i5, Ryzen 5',
+    screen_size     VARCHAR(20) DEFAULT NULL COMMENT 'e.g. 15.6\", 14\"',
+    graphics        VARCHAR(100) DEFAULT NULL COMMENT 'e.g. NVIDIA GTX 1650, Integrated',
     warranty_months INT DEFAULT NULL,
     product_condition VARCHAR(50) DEFAULT 'New' COMMENT 'New, Used, Refurbished',
     purchase_price  DECIMAL(12,2) NOT NULL DEFAULT 0.00,
@@ -564,3 +567,37 @@ CREATE INDEX idx_banktxn_date ON bank_transactions(transaction_date);
 CREATE INDEX idx_journal_date ON journal_entries(entry_date);
 CREATE INDEX idx_activity_user ON activity_logs(user_id);
 CREATE INDEX idx_activity_module ON activity_logs(module);
+
+-- ---------------------------------------------------------
+-- 31. general_parties
+-- ---------------------------------------------------------
+CREATE TABLE general_parties (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    name            VARCHAR(100) NOT NULL,
+    phone           VARCHAR(20),
+    address         TEXT,
+    opening_balance DECIMAL(12,2) DEFAULT 0.00,
+    notes           TEXT,
+    status          TINYINT(1) DEFAULT 1,
+    created_at      DATE NOT NULL,
+    updated_at      DATE DEFAULT NULL
+) ENGINE=InnoDB;
+
+-- ---------------------------------------------------------
+-- 32. general_transactions
+-- ---------------------------------------------------------
+CREATE TABLE general_transactions (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    party_id        INT NOT NULL,
+    transaction_date DATE NOT NULL,
+    type            ENUM('receipt','payment') NOT NULL COMMENT 'receipt = money in, payment = money out',
+    amount          DECIMAL(12,2) NOT NULL,
+    payment_method  ENUM('cash','bank') DEFAULT 'cash',
+    bank_account_id INT DEFAULT NULL,
+    description     TEXT,
+    created_by      INT DEFAULT NULL,
+    created_at      DATE NOT NULL,
+    FOREIGN KEY (party_id) REFERENCES general_parties(id) ON DELETE CASCADE,
+    FOREIGN KEY (bank_account_id) REFERENCES bank_accounts(id) ON DELETE SET NULL,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB;

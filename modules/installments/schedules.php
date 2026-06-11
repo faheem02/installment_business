@@ -223,9 +223,7 @@ foreach ($items as $i) {
                     <a href="<?=$base_url?>modules/payments/receipt.php?id=<?=$si['payment_id']?>" class="btn btn-sm btn-info" title="View Receipt"><i class="fas fa-eye"></i></a>
                     <a href="<?=$base_url?>modules/payments/receipt.php?id=<?=$si['payment_id']?>&print=1" class="btn btn-sm btn-secondary" title="Print Receipt" target="_blank"><i class="fas fa-print"></i></a>
                   <?php endif; ?>
-                  <?php if ($si['status'] === 'paid'): ?>
-                    <span class="text-success small"><i class="fas fa-check-circle"></i> Paid</span>
-                  <?php else: ?>
+                  <?php if ($si['status'] !== 'paid'): ?>
                     <button class="btn btn-sm btn-success" onclick="openPayment(<?=$si['id']?>, '<?=htmlspecialchars($si['invoice_no'])?>', '<?=htmlspecialchars($si['customer_name'])?>', <?=$si['installment_no']?>, <?=$si['amount']?>, <?=$si['paid_amount']?>)"><i class="fas fa-hand-holding-usd"></i> Collect</button>
                   <?php endif; ?>
               </td>

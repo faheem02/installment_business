@@ -100,7 +100,7 @@ require_once '../../includes/header.php';
                   ?>
                   <span class="badge badge-<?= $badge ?>"><?= ucfirst($s['payment_status']) ?></span>
                 </td>
-                <td>
+                <td class="text-nowrap">
                   <a href="invoice.php?id=<?= $s['id'] ?>" class="btn btn-sm btn-info" title="View"><i class="fas fa-eye"></i></a>
                   <a href="invoice.php?id=<?= $s['id'] ?>&print=1" class="btn btn-sm btn-secondary" title="Print" target="_blank"><i class="fas fa-print"></i></a>
                 </td>
