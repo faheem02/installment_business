@@ -43,6 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['apply_late_fee'])) {
     }
 }
 
+<<<<<<< HEAD
 if ($is_print) {
     $total_overdue = 0; $total_late_fees = 0;
     foreach ($items as $i) { $total_overdue += $i['balance']; $total_late_fees += $i['late_fee']; }
