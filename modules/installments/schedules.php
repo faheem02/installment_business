@@ -345,7 +345,6 @@ function openPayment(id, invoice, customer, instNo, amount, paid) {
   var bal = amount - paid;
   document.getElementById('modalBalance').textContent = 'PKR ' + bal.toLocaleString('en-US', {minimumFractionDigits:2});
   document.getElementById('payAmount').value = bal > 0 ? bal.toFixed(2) : '';
-  document.getElementById('payAmount').max = amount;
   $('#paymentModal').modal('show');
 }
 </script>

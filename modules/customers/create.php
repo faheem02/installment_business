@@ -12,7 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'email'           => $_POST['email'] ?? '',
         'address'         => $_POST['address'] ?? '',
         'city'            => $_POST['city'] ?? '',
-        'cnic'            => $_POST['cnic'],
+        'cnic'            => $_POST['cnic'] ? ,
         'cnic_expiry'     => $_POST['cnic_expiry'] ?: null,
         'guardian_name'   => $_POST['guardian_name'] ?? '',
         'guardian_relation' => $_POST['guardian_relation'] ?? '',
@@ -37,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'phone'                => $_POST["g_phone_$i"],
                 'email'                => $_POST["g_email_$i"] ?? '',
                 'address'              => $_POST["g_address_$i"] ?? '',
-                'cnic'                 => $_POST["g_cnic_$i"],
+                'cnic'                 => $_POST["g_cnic_$i"] ? ,
                 'guardian_name'        => $_POST["g_guardian_$i"] ?? '',
                 'relation_to_customer' => $_POST["g_relation_$i"] ?? '',
                 'occupation'           => $_POST["g_occupation_$i"] ?? '',
@@ -68,8 +68,8 @@ require_once '../../includes/header.php';
           <input type="text" name="full_name" class="form-control" required>
         </div>
         <div class="col-md-3 mb-3">
-          <label class="form-label">Phone <span class="text-danger">*</span></label>
-          <input type="text" name="phone" class="form-control" required>
+          <label class="form-label">Phone </label>
+          <input type="text" name="phone" class="form-control" >
         </div>
         <div class="col-md-3 mb-3">
           <label class="form-label">Email</label>
@@ -99,8 +99,8 @@ require_once '../../includes/header.php';
     <div class="card-body">
       <div class="row">
         <div class="col-md-4 mb-3">
-          <label class="form-label">CNIC Number <span class="text-danger">*</span></label>
-          <input type="text" name="cnic" class="form-control" placeholder="XXXXX-XXXXXXX-X" required>
+          <label class="form-label">CNIC Number </label>
+          <input type="text" name="cnic" class="form-control" placeholder="XXXXX-XXXXXXX-X" >
         </div>
         <div class="col-md-4 mb-3">
           <label class="form-label">CNIC Expiry</label>
